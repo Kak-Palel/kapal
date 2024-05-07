@@ -1,8 +1,0 @@
-[
-{
-  "directory": "/home/olel/Projects/kapal/build",
-  "command": "/usr/lib/ccache/c++ -g -o CMakeFiles/game_kapal.dir/main.cpp.o -c /home/olel/Projects/kapal/main.cpp",
-  "file": "/home/olel/Projects/kapal/main.cpp",
-  "output": "CMakeFiles/game_kapal.dir/main.cpp.o"
-}
-]
