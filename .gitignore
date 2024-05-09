@@ -38,5 +38,6 @@ Thumbs.db
 
 # workspace stuffs #
 ####################
+.vscode/*
 build/*
 !build/build.xml
