@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 find_package(raylib REQUIRED)
 
 set(projectSOURCES
-    main.cpp
+    src/main.cpp
 
 )
 
