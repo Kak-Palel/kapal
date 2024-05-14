@@ -116,19 +116,19 @@ private:
 
     void move() override
     {
-        const float maxThrottle = 0.05;
-        const float baseSpeed = 0.01;
-        const float maxRoll = 30;
+        const float maxThrottle = 0.075;
+        const float baseSpeed = 0.005;
+        const float maxRoll = 15;
 
-        if(IsKeyDown(KEY_W) && throttle <= maxThrottle) {throttle += 0.005;}
-        if(IsKeyDown(KEY_A) && tempRoll > -1*maxRoll ) {tempRoll--;}
-        if(IsKeyDown(KEY_S) && throttle > -2*baseSpeed) {throttle -= 0.005;}
-        if(IsKeyDown(KEY_D) && tempRoll < maxRoll ) {tempRoll++;}
+        if(IsKeyDown(KEY_W) && throttle <= maxThrottle) {throttle += 0.001;}
+        if(IsKeyDown(KEY_A) && tempRoll > -1*maxRoll ) {tempRoll -= (baseSpeed + throttle) * 3;}
+        if(IsKeyDown(KEY_S) && throttle > -2*baseSpeed) {throttle -= 0.001;}
+        if(IsKeyDown(KEY_D) && tempRoll < maxRoll ) {tempRoll += (baseSpeed + throttle) * 3;}
 
-        else if(tempRoll == -1*maxRoll) {angle++;}
-        if(tempRoll == maxRoll) {angle--;}
+        if(tempRoll >= maxRoll/2) {angle -= (baseSpeed + throttle) * 7.5;}
+        else if(tempRoll <= -1*maxRoll/2) {angle += (baseSpeed + throttle) * 7.5;}
         
-        model.transform = MatrixRotateXYZ((Vector3){0.0f, DEG2RAD * angle, DEG2RAD * tempRoll});
+        model.transform = MatrixRotateXYZ((Vector3){0.0f, DEG2RAD * angle, DEG2RAD * -1* tempRoll});
 
         position.x += (baseSpeed + throttle) * sin(angle * DEG2RAD);
         position.z += (baseSpeed + throttle) * cos(angle * DEG2RAD);
@@ -137,8 +137,8 @@ private:
 
         camera->setTarget(position.x, 0, position.z);
 
-        if(tempRoll < 0 && !IsKeyDown(KEY_A)) {tempRoll++;}
-        else if(tempRoll > 0 && !IsKeyDown(KEY_D)) {tempRoll--;}
+        if(tempRoll < 0 && !IsKeyDown(KEY_A)) {tempRoll += (baseSpeed + throttle) * 3;}
+        else if(tempRoll > 0 && !IsKeyDown(KEY_D)) {tempRoll -= (baseSpeed + throttle) * 3;}
     }
 
 public:
