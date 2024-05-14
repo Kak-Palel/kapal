@@ -1,12 +1,9 @@
 #include <iostream>
 #include <string>
 #include <cmath>
-#include <complex>
-#include <vector>
 #include "raylib.h"
 #include "rcamera.h"
 #include "raymath.h"
-#include "rlgl.h"
 
 const int screenWidth = 2560;
 const int screenHeight = 1600;
@@ -15,82 +12,16 @@ enum {MENU = 0, SETTING, GAMEPLAY, PAUSE, DEAD};
 
 class Ocean {
 private:
-    int size;
-    float *heightMap;
-    Shader shader;
-    Mesh mesh;
-    Texture2D texture;
-    RenderTexture2D renderTexture;
+    int maxWave;
 
 public:
-    Ocean(int size) : size(size) {
-        heightMap = new float[size * size];
-        GenerateHeightMap();
+    Ocean(int max_wave) : maxWave(max_wave) {
 
-        shader = LoadShader("assets/ocean.vs", "assets/ocean.fs");
-        shader.locs[SHADER_LOC_MATRIX_MODEL] = GetShaderLocation(shader, "matModel");
-        shader.locs[SHADER_LOC_MATRIX_VIEW] = GetShaderLocation(shader, "matView");
-        shader.locs[SHADER_LOC_MATRIX_PROJECTION] = GetShaderLocation(shader, "matProjection");
-        shader.locs[SHADER_LOC_VECTOR_VIEW] = GetShaderLocation(shader, "viewPos");
-
-        GenerateMesh();
-        GenerateTexture();
     }
 
     ~Ocean() {
-        delete[] heightMap;
-        UnloadTexture(texture);
-        UnloadRenderTexture(renderTexture);
-        UnloadShader(shader);   
+
     }
-
-    void GenerateHeightMap() {
-        for (int x = 0; x < size; x++) {
-            for (int z = 0; z < size; z++) {
-                heightMap[x * size + z] = sin(x * 0.1f) * cos(z * 0.1f) * 5.0f;
-            }
-        }
-    }
-
-    void GenerateMesh() {
-        mesh = GenMeshPlane(size, size, size, size);
-    }
-
-    void GenerateTexture() {
-        renderTexture = LoadRenderTexture(size, size);
-        BeginTextureMode(renderTexture);
-        ClearBackground(BLANK);
-        EndTextureMode();
-
-        // Create a texture from the render texture's texture
-        Image image = LoadImageFromTexture(renderTexture.texture);
-        texture = LoadTextureFromImage(image);
-        UnloadImage(image);
-    }
-
-
-    void Update() {
-        // Update ocean simulation here
-    }
-
-    void Draw(Camera* camera) {
-        // Draw ocean surface
-        BeginShaderMode(shader);
-        SetShaderValueMatrix(shader, shader.locs[SHADER_LOC_MATRIX_MODEL], MatrixIdentity());
-        SetShaderValueMatrix(shader, shader.locs[SHADER_LOC_MATRIX_VIEW], GetCameraMatrix(*camera));
-        SetShaderValueMatrix(shader, shader.locs[SHADER_LOC_MATRIX_PROJECTION], GetCameraMatrix(*camera));
-        SetShaderValue(shader, shader.locs[SHADER_LOC_VECTOR_VIEW], &(camera->position), SHADER_UNIFORM_VEC3);
-
-        Material material = { 0 };
-        material.maps = (MaterialMap*)malloc(11*sizeof(MaterialMap));
-        material.shader = shader;
-        material.maps[MATERIAL_MAP_DIFFUSE].texture = texture;
-
-        DrawMesh(mesh, material, {0, 0, 0});
-
-        EndShaderMode();
-    }
-
 
 };
 
@@ -118,11 +49,27 @@ class MyCam
 
     void viewScope(Vector3* arr)
     {
-        //TODO: get the 4 end point of the field of views
-        arr[0] = {0, 0, 0};
-        arr[1] = {0, 0, 0};
-        arr[2] = {0, 0, 0};
-        arr[3] = {0, 0, 0};
+        const float xUpperDist = cam->position.y * tan((67.5f)*DEG2RAD);
+        const float xLowerDist = cam->position.y * tan((22.5f)*DEG2RAD);
+        const float upperDist = cam->position.y / cos((67.5f)*DEG2RAD);
+        const float lowerDist = cam->position.y / cos((22.5f)*DEG2RAD);
+        const float zHalfUpperDist = upperDist * tan((cam->fovy * ((float)GetScreenWidth()/(float)GetScreenHeight())/2)*DEG2RAD);
+        const float zHalfLowerDist = lowerDist * tan((cam->fovy * ((float)GetScreenWidth()/(float)GetScreenHeight())/2)*DEG2RAD);
+
+        arr[0] = {cam->position.x + xUpperDist, 0, cam->position.z - zHalfUpperDist};
+        arr[1] = {cam->position.x + xUpperDist, 0, cam->position.z + zHalfUpperDist};
+        arr[2] = {cam->position.x + xLowerDist, 0, cam->position.z + zHalfLowerDist};
+        arr[3] = {cam->position.x + xLowerDist, 0, cam->position.z - zHalfLowerDist};
+    }
+
+    void setTarget(float x, float y, float z)
+    {
+        cam->target = (Vector3){x, y, z};
+    }
+
+    void setPos(float x, float y, float z)
+    {
+        cam->position = (Vector3){x, y, z};
     }
 
     Camera* getCam()
@@ -134,6 +81,7 @@ class MyCam
     {
         return cam->position;
     }
+
 };
 
 class Kapal
@@ -147,12 +95,12 @@ class Kapal
     
     public:
     Kapal(Vector3 pos) : position(pos) {}
-
+    virtual ~Kapal() {}
 };
 
 class MKapal : Kapal
 {
-    private:
+private:
     float scale;
     Model model;
     float throttle;
@@ -187,11 +135,13 @@ class MKapal : Kapal
         CameraMoveForward(camera->getCam(), (baseSpeed + throttle)*sin(angle * DEG2RAD), true);
         CameraMoveRight(camera->getCam(), (baseSpeed + throttle)*cos(angle * DEG2RAD) , true);
 
+        camera->setTarget(position.x, 0, position.z);
+
         if(tempRoll < 0 && !IsKeyDown(KEY_A)) {tempRoll++;}
         else if(tempRoll > 0 && !IsKeyDown(KEY_D)) {tempRoll--;}
     }
 
-    public:
+public:
     MKapal(Vector3 pos, float initAngle, MyCam* cam) : Kapal(pos)
     {
         camera = cam;
@@ -209,6 +159,10 @@ class MKapal : Kapal
         tempRoll = 0;
     }
 
+    Vector3 getPos()
+    {
+        return position;
+    }
 
     void update()
     {
@@ -249,7 +203,6 @@ int main(void)
     
     
     MyCam camera({0, 0, 0});
-    Ocean ocean(640);
     MKapal main_kapal({0, 1.5, 0}, 0, &camera);
     int gamestate = GAMEPLAY;
 
@@ -270,17 +223,15 @@ int main(void)
         case SETTING:
             break;
         case GAMEPLAY:
-            ClearBackground((Color){WHITE});
+            ClearBackground((Color){29,162,216});
 
             BeginMode3D(*(camera.getCam()));
 
                 DrawGrid(1000, 1);
                 main_kapal.update();
-                ocean.Update();
-                ocean.Draw(camera.getCam());
-                
 
             EndMode3D();
+
             break;
         }
 
