@@ -104,43 +104,21 @@ private:
     float scale;
     Model model;
     float throttle;
-    float angle;
-    float tempRoll;
     float dist_cam2kapal;
     MyCam* camera;
 
-    void draw() override
+    float angle;
+    float buoyancyPeriod;
+    float buoyancyAngle;
+    Vector3 localAxis[3];
+    float tempRoll;
+
+    void determineLocalAxis()
     {
-        DrawModel(model, position, scale, GRAY);
+        localAxis[0] = Vector3Normalize((Vector3){position.x*sin((angle)*DEG2RAD), 0, position.z*cos((angle)*DEG2RAD)});
+        localAxis[1] = (Vector3){0, 1, 0};
+        localAxis[2] = Vector3Normalize(Vector3CrossProduct(localAxis[0], localAxis[1]));
     }
-
-    void move() override
-    {
-        const float maxThrottle = 0.075;
-        const float baseSpeed = 0.005;
-        const float maxRoll = 15;
-
-        if(IsKeyDown(KEY_W) && throttle <= maxThrottle) {throttle += 0.001;}
-        if(IsKeyDown(KEY_A) && tempRoll > -1*maxRoll ) {tempRoll -= (baseSpeed + throttle) * 3;}
-        if(IsKeyDown(KEY_S) && throttle > -2*baseSpeed) {throttle -= 0.001;}
-        if(IsKeyDown(KEY_D) && tempRoll < maxRoll ) {tempRoll += (baseSpeed + throttle) * 3;}
-
-        if(tempRoll >= maxRoll/2) {angle -= (baseSpeed + throttle) * 7.5;}
-        else if(tempRoll <= -1*maxRoll/2) {angle += (baseSpeed + throttle) * 7.5;}
-        
-        model.transform = MatrixRotateXYZ((Vector3){0.0f, DEG2RAD * angle, DEG2RAD * -1* tempRoll});
-
-        position.x += (baseSpeed + throttle) * sin(angle * DEG2RAD);
-        position.z += (baseSpeed + throttle) * cos(angle * DEG2RAD);
-        CameraMoveForward(camera->getCam(), (baseSpeed + throttle)*sin(angle * DEG2RAD), true);
-        CameraMoveRight(camera->getCam(), (baseSpeed + throttle)*cos(angle * DEG2RAD) , true);
-
-        camera->setTarget(position.x, 0, position.z);
-
-        if(tempRoll < 0 && !IsKeyDown(KEY_A)) {tempRoll += (baseSpeed + throttle) * 3;}
-        else if(tempRoll > 0 && !IsKeyDown(KEY_D)) {tempRoll -= (baseSpeed + throttle) * 3;}
-    }
-
 public:
     MKapal(Vector3 pos, float initAngle, MyCam* cam) : Kapal(pos)
     {
@@ -157,17 +135,58 @@ public:
 
         throttle = 0;
         tempRoll = 0;
+
+        buoyancyPeriod = 0;
+        buoyancyAngle = 0;
+
+        localAxis[0] = {1, 0, 0};
+        localAxis[1] = {0, 1, 0};   
+        localAxis[2] = {0, 0, 1};
     }
 
-    Vector3 getPos()
+    void draw() override
     {
-        return position;
+        DrawModel(model, position, scale, GRAY);
     }
 
-    void update()
+    void move() override
     {
-        move();
-        draw();
+        const float maxThrottle = 0.075;
+        const float baseSpeed = 0.005;
+        const float maxRoll = 15;
+        
+        //movement angle calculation
+        if(IsKeyDown(KEY_W) && throttle <= maxThrottle) {throttle += 0.001;}
+        if(IsKeyDown(KEY_A) && tempRoll > -1*maxRoll ) {tempRoll -= (baseSpeed + throttle) * 3;}
+        if(IsKeyDown(KEY_S) && throttle > -2*baseSpeed) {throttle -= 0.001;}
+        if(IsKeyDown(KEY_D) && tempRoll < maxRoll ) {tempRoll += (baseSpeed + throttle) * 3;}
+        if(tempRoll > maxRoll) {tempRoll = maxRoll;}
+        else if(tempRoll < -1*maxRoll) {tempRoll = -1*maxRoll;}
+        if(tempRoll >= maxRoll/2) {angle -= (baseSpeed + throttle) * 8 * abs(sin(6*tempRoll));}
+        else if(tempRoll <= -1*maxRoll/2) {angle += (baseSpeed + throttle) * 8 * abs(sin(6*tempRoll));}
+
+        //buoyancy angle calculation
+        buoyancyPeriod += 0.5*(baseSpeed + throttle);
+        position.y = 0.5 + 0.5*sin(0.1*buoyancyPeriod);
+        buoyancyAngle = 10*sin(buoyancyPeriod);
+        // if(buoyancyPeriod >= 2*PI) {buoyancyPeriod = 0;}
+        
+        //model rotation using local axis
+        model.transform = MatrixIdentity();
+        model.transform = MatrixMultiply(model.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
+        model.transform = MatrixMultiply(model.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
+        model.transform = MatrixMultiply(model.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
+
+        position.x += (baseSpeed + throttle) * sin(angle * DEG2RAD);
+        position.z += (baseSpeed + throttle) * cos(angle * DEG2RAD);
+        CameraMoveForward(camera->getCam(), (baseSpeed + throttle)*sin(angle * DEG2RAD), true);
+        CameraMoveRight(camera->getCam(), (baseSpeed + throttle)*cos(angle * DEG2RAD) , true);
+
+        camera->setTarget(position.x, 0, position.z);
+
+        if(tempRoll < 0 && !IsKeyDown(KEY_A)) {tempRoll += (baseSpeed + throttle) * 3;}
+        else if(tempRoll > 0 && !IsKeyDown(KEY_D)) {tempRoll -= (baseSpeed + throttle) * 3;}
+
         dist_cam2kapal = Vector3Distance(position, camera->getPos());
         float zoomMove = GetMouseWheelMove();
         
@@ -175,6 +194,12 @@ public:
         {
             CameraMoveForward(camera->getCam(), zoomMove, false);
         }
+        determineLocalAxis();
+    }
+
+    Vector3 getPos()
+    {
+        return position;
     }
 
     ~MKapal()
@@ -200,8 +225,7 @@ int scrSize(int pixLen, char axis)
 int main(void)
 {
     InitWindow(screenWidth, screenHeight, "KAPAL");
-    
-    
+
     MyCam camera({0, 0, 0});
     MKapal main_kapal({0, 1.5, 0}, 0, &camera);
     int gamestate = GAMEPLAY;
@@ -209,7 +233,7 @@ int main(void)
     float deltaTime;
     ToggleFullscreen();
     SetTargetFPS(60);
-    
+
     while (!WindowShouldClose())
     {
         deltaTime = GetFrameTime();
@@ -226,9 +250,12 @@ int main(void)
             ClearBackground((Color){29,162,216});
 
             BeginMode3D(*(camera.getCam()));
+                //game update
+                main_kapal.move();
 
+                //game draw
                 DrawGrid(1000, 1);
-                main_kapal.update();
+                main_kapal.draw();
 
             EndMode3D();
 
