@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include <cmath>
+#include <vector>
 #include "raylib.h"
 #include "rcamera.h"
 #include "raymath.h"
@@ -9,21 +10,6 @@ const int screenWidth = 2560;
 const int screenHeight = 1600;
 
 enum {MENU = 0, SETTING, GAMEPLAY, PAUSE, DEAD};
-
-class Ocean {
-private:
-    int maxWave;
-
-public:
-    Ocean(int max_wave) : maxWave(max_wave) {
-
-    }
-
-    ~Ocean() {
-
-    }
-
-};
 
 class MyCam
 {
@@ -47,7 +33,7 @@ class MyCam
         return Vector3Distance(point, cam->position);
     }
 
-    void viewScope(Vector3* arr)
+    void viewScope(std::vector<Vector3>& arr)
     {
         const float xUpperDist = cam->position.y * tan((67.5f)*DEG2RAD);
         const float xLowerDist = cam->position.y * tan((22.5f)*DEG2RAD);
@@ -55,11 +41,12 @@ class MyCam
         const float lowerDist = cam->position.y / cos((22.5f)*DEG2RAD);
         const float zHalfUpperDist = upperDist * tan((cam->fovy * ((float)GetScreenWidth()/(float)GetScreenHeight())/2)*DEG2RAD);
         const float zHalfLowerDist = lowerDist * tan((cam->fovy * ((float)GetScreenWidth()/(float)GetScreenHeight())/2)*DEG2RAD);
-
+        
         arr[0] = {cam->position.x + xUpperDist, 0, cam->position.z - zHalfUpperDist};
         arr[1] = {cam->position.x + xUpperDist, 0, cam->position.z + zHalfUpperDist};
         arr[2] = {cam->position.x + xLowerDist, 0, cam->position.z + zHalfLowerDist};
         arr[3] = {cam->position.x + xLowerDist, 0, cam->position.z - zHalfLowerDist};
+
     }
 
     void setTarget(float x, float y, float z)
@@ -80,6 +67,84 @@ class MyCam
     Vector3 getPos()
     {
         return cam->position;
+    }
+
+};
+
+class Ocean {
+private:
+    int maxWave;
+    int waveCount;
+    float waveDensity;
+    MyCam* cam;
+    float waveSpeed;
+    std::vector<Vector3> scope;
+    std::vector<Vector3*> wavePos;
+
+    void createWave(int wave_count)
+    {
+        for(int i = 0; i < wave_count; i++) {
+            Vector3* temp = new Vector3();
+            temp->x = GetRandomValue(scope[0].x, scope[2].x);
+            temp->y = 0;
+            temp->z = GetRandomValue(scope[0].z, scope[1].z);
+            wavePos.push_back(temp);
+            waveCount++;
+        }
+        std::cout<<"waveCount: "<<waveCount<<std::endl;
+    }
+
+
+public:
+    Ocean(int max_wave, MyCam* camera , float wave_speed, float wave_density)
+    : maxWave(max_wave), waveSpeed(wave_speed), cam(camera), waveDensity(wave_density) {
+        waveCount = 0;
+        scope = {(Vector3){0, 0, 0}, (Vector3){0, 0, 0}, (Vector3){0, 0, 0}, (Vector3){0, 0, 0}};
+        cam->viewScope(scope);
+        createWave(waveDensity*(scope[0].x - scope[2].x)*(scope[1].z - scope[0].z));
+
+        //LOAD WAVE MODEL
+    }
+
+    void update()
+    {
+        cam->viewScope(scope);
+        for(int i = 0; i < waveCount; i++) {
+            wavePos[i]->x += waveSpeed;
+
+            if(wavePos[i]->x > scope[0].x + 2) {
+                wavePos[i]->x = scope[2].x - 2;
+                wavePos[i]->z = GetRandomValue(scope[0].z, scope[1].z);
+            }
+            else if (wavePos[i]->x < scope[2].x - 2) {
+                wavePos[i]->x = scope[0].x + 2;
+                wavePos[i]->z = GetRandomValue(scope[0].z, scope[1].z);
+            }
+            else if (wavePos[i]->z > scope[1].z + 2) {
+                wavePos[i]->z = scope[0].z + 2;
+                wavePos[i]->x = GetRandomValue(scope[2].x, scope[0].x);
+            }
+            else if (wavePos[i]->z < scope[0].z - 2) {
+                wavePos[i]->z = scope[1].z - 2;
+                wavePos[i]->x = GetRandomValue(scope[2].x, scope[0].x);
+            }
+        }
+    }
+
+    void drawWaves()
+    {
+        for(int i = 0; i < waveCount; i++) {
+            DrawCube(*wavePos[i], 0.5f, 0.5f, 0.5f, WHITE);
+        }
+    }
+
+    ~Ocean() {
+        while(!wavePos.empty())
+        {
+            delete wavePos.back();
+            wavePos.pop_back();
+        }
+        //UNLOAD WAVE MODEL
     }
 
 };
@@ -165,6 +230,8 @@ public:
         if(tempRoll >= maxRoll/2) {angle -= (baseSpeed + throttle) * 8 * abs(sin(6*tempRoll));}
         else if(tempRoll <= -1*maxRoll/2) {angle += (baseSpeed + throttle) * 8 * abs(sin(6*tempRoll));}
 
+        GetFrameTime();
+
         //buoyancy angle calculation
         buoyancyPeriod += 0.5*(baseSpeed + throttle);
         position.y = 0.5 + 0.5*sin(0.1*buoyancyPeriod);
@@ -228,6 +295,7 @@ int main(void)
 
     MyCam camera({0, 0, 0});
     MKapal main_kapal({0, 1.5, 0}, 0, &camera);
+    Ocean ocean(100, &camera, 0.01, 0.1);
     int gamestate = GAMEPLAY;
 
     float deltaTime;
@@ -252,10 +320,12 @@ int main(void)
             BeginMode3D(*(camera.getCam()));
                 //game update
                 main_kapal.move();
+                ocean.update();
 
                 //game draw
                 DrawGrid(1000, 1);
                 main_kapal.draw();
+                ocean.drawWaves();
 
             EndMode3D();
 
