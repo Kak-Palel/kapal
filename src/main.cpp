@@ -190,15 +190,13 @@ public:
     {
         camera = cam;
         
-        deck = LoadModel("assets/obj/ship/deck.obj");
-        std::cout<<"deck: "<<deck.meshCount<<std::endl;
         railing = LoadModel("assets/obj/ship/railing.obj");
         std::cout<<"railing: "<<railing.meshCount<<std::endl;
+        deck = LoadModel("assets/obj/ship/deck.obj");
+        std::cout<<"deck: "<<deck.meshCount<<std::endl;
 
         deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/deck.png");
-        std::cout<<"deck texture: "<<deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture.id<<std::endl;
         railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/railing.png");
-        std::cout<<"railing texture: "<<railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture.id<<std::endl;
 
         scale = 0.25f;
         angle = initAngle + 90;
@@ -217,7 +215,7 @@ public:
     void draw() override
     {
         DrawModel(deck, {position.x, position.y + 1.5f, position.z}, scale, GRAY);
-        DrawModel(railing, {position.x, position.y + 3, position.z}, scale, WHITE);
+        DrawModel(railing, {position.x, position.y + 1.5f, position.z}, scale, WHITE);
     }
 
     void move() override
