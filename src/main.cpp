@@ -46,7 +46,7 @@ class MyCam
         arr[1] = {cam->position.x + xUpperDist, 0, cam->position.z + zHalfUpperDist};
         arr[2] = {cam->position.x + xLowerDist, 0, cam->position.z + zHalfLowerDist};
         arr[3] = {cam->position.x + xLowerDist, 0, cam->position.z - zHalfLowerDist};
-
+        
     }
 
     void setTarget(float x, float y, float z)
@@ -167,7 +167,8 @@ class MKapal : Kapal
 {
 private:
     float scale;
-    Model model;
+    Model deck;
+    Model railing;
     float throttle;
     float dist_cam2kapal;
     MyCam* camera;
@@ -188,14 +189,18 @@ public:
     MKapal(Vector3 pos, float initAngle, MyCam* cam) : Kapal(pos)
     {
         camera = cam;
-        model = LoadModel("assets/main_ship.obj");
+        
+        deck = LoadModel("assets/obj/ship/deck.obj");
+        std::cout<<"deck: "<<deck.meshCount<<std::endl;
+        railing = LoadModel("assets/obj/ship/railing.obj");
+        std::cout<<"railing: "<<railing.meshCount<<std::endl;
 
-        model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/main_ship/tex/ship_lambert3_Diffuse.png");
-        model.materials[0].maps[MATERIAL_MAP_ROUGHNESS].texture = LoadTexture("assets/main_ship/tex/ship_lambert3_Glossiness.png");
-        model.materials[0].maps[MATERIAL_MAP_HEIGHT].texture = LoadTexture("assets/main_ship/tex/ship_lambert3_Height.png");
-        model.materials[0].maps[MATERIAL_MAP_NORMAL].texture = LoadTexture("assets/main_ship/tex/ship_lambert3_Normal.png");
+        deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/deck.png");
+        std::cout<<"deck texture: "<<deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture.id<<std::endl;
+        railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/railing.png");
+        std::cout<<"railing texture: "<<railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture.id<<std::endl;
 
-        scale = 0.03f;
+        scale = 0.25f;
         angle = initAngle + 90;
 
         throttle = 0;
@@ -211,7 +216,8 @@ public:
 
     void draw() override
     {
-        DrawModel(model, position, scale, GRAY);
+        DrawModel(deck, {position.x, position.y + 1.5f, position.z}, scale, GRAY);
+        DrawModel(railing, {position.x, position.y + 3, position.z}, scale, WHITE);
     }
 
     void move() override
@@ -239,10 +245,14 @@ public:
         // if(buoyancyPeriod >= 2*PI) {buoyancyPeriod = 0;}
         
         //model rotation using local axis
-        model.transform = MatrixIdentity();
-        model.transform = MatrixMultiply(model.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
-        model.transform = MatrixMultiply(model.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
-        model.transform = MatrixMultiply(model.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
+        deck.transform = MatrixIdentity();
+        deck.transform = MatrixMultiply(deck.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
+        deck.transform = MatrixMultiply(deck.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
+        deck.transform = MatrixMultiply(deck.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
+        railing.transform = MatrixIdentity();
+        railing.transform = MatrixMultiply(railing.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
+        railing.transform = MatrixMultiply(railing.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
+        railing.transform = MatrixMultiply(railing.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
 
         position.x += (baseSpeed + throttle) * sin(angle * DEG2RAD);
         position.z += (baseSpeed + throttle) * cos(angle * DEG2RAD);
@@ -271,11 +281,10 @@ public:
 
     ~MKapal()
     {
-        UnloadTexture(model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
-        UnloadTexture(model.materials[0].maps[MATERIAL_MAP_ROUGHNESS].texture);
-        UnloadTexture(model.materials[0].maps[MATERIAL_MAP_HEIGHT].texture);
-        UnloadTexture(model.materials[0].maps[MATERIAL_MAP_NORMAL].texture);
-        UnloadModel(model);
+        UnloadTexture(deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
+        UnloadTexture(railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
+        UnloadModel(deck);
+        UnloadModel(railing);
     }
 };
 
