@@ -10,6 +10,7 @@ const int screenWidth = 2560;
 const int screenHeight = 1600;
 
 enum {MENU = 0, SETTING, GAMEPLAY, PAUSE, DEAD};
+unsigned long long int frameCounter = 0;
 
 class MyCam
 {
@@ -46,7 +47,6 @@ class MyCam
         arr[1] = {cam->position.x + xUpperDist, 0, cam->position.z + zHalfUpperDist};
         arr[2] = {cam->position.x + xLowerDist, 0, cam->position.z + zHalfLowerDist};
         arr[3] = {cam->position.x + xLowerDist, 0, cam->position.z - zHalfLowerDist};
-        
     }
 
     void setTarget(float x, float y, float z)
@@ -78,7 +78,9 @@ private:
     float waveDensity;
     MyCam* cam;
     float waveSpeed;
+    Model waveModel;
     std::vector<Vector3> scope;
+    std::vector<Vector3> tempScope;
     std::vector<Vector3*> wavePos;
 
     void createWave(int wave_count)
@@ -91,7 +93,85 @@ private:
             wavePos.push_back(temp);
             waveCount++;
         }
-        std::cout<<"waveCount: "<<waveCount<<std::endl;
+    }
+    
+    void createWave(std::vector<Vector3>& oldScope)
+    {
+        int targetWave = waveDensity*(scope[0].x - scope[2].x)*(scope[1].z - scope[0].z);
+        if((oldScope[0].x - oldScope[2].x)*(oldScope[1].z - oldScope[0].z) - (scope[0].x - scope[2].x)*(scope[1].z - scope[0].z) > 1)
+        {
+            while(waveCount > targetWave)
+            {
+                int idx = GetRandomValue(0, wavePos.size() - 1);
+                delete wavePos[idx];
+                wavePos.erase(wavePos.begin() + idx);
+                waveCount--;
+            }
+            return;
+        }
+
+        for(int i = 0; (i <= targetWave - waveCount); i ++)
+        {
+            switch(i%4)
+            {
+                case 0:
+                    createWave("bottom");
+                    break;
+                case 1:
+                    createWave("top");
+                    break;
+                case 2:
+                    createWave("left");
+                    break;
+                case 3:
+                    createWave("right");
+                    break;
+            }
+        }
+    }
+    
+    void createWave(const std::string side)
+    {
+        if(side == "bottom")
+        {
+            std::cout<<"bottom\n";
+            Vector3* temp = new Vector3();
+            temp->x = scope[2].x - GetRandomValue(1, 4);
+            temp->y = 0;
+            temp->z = GetRandomValue(scope[0].z, scope[1].z);
+            wavePos.push_back(temp);
+            waveCount++;
+        }
+        else if(side == "top")
+        {
+            std::cout<<"top\n";
+            Vector3* temp = new Vector3();
+            temp->x = scope[0].x + GetRandomValue(1, 4);
+            temp->y = 0;
+            temp->z = GetRandomValue(scope[0].z, scope[1].z);
+            wavePos.push_back(temp);
+            waveCount++;
+        }
+        else if(side == "left")
+        {
+            std::cout<<"left\n";
+            Vector3* temp = new Vector3();
+            temp->x = GetRandomValue(scope[2].x, scope[0].x);
+            temp->y = 0;
+            temp->z = scope[0].z + GetRandomValue(1, 4);
+            wavePos.push_back(temp);
+            waveCount++;
+        }
+        else if(side == "right")
+        {
+            std::cout<<"right\n";
+            Vector3* temp = new Vector3();
+            temp->x = GetRandomValue(scope[2].x, scope[0].x);
+            temp->y = 0;
+            temp->z = scope[1].z - GetRandomValue(1, 4);
+            wavePos.push_back(temp);
+            waveCount++;
+        }
     }
 
 
@@ -101,40 +181,58 @@ public:
         waveCount = 0;
         scope = {(Vector3){0, 0, 0}, (Vector3){0, 0, 0}, (Vector3){0, 0, 0}, (Vector3){0, 0, 0}};
         cam->viewScope(scope);
+        tempScope = scope;
         createWave(waveDensity*(scope[0].x - scope[2].x)*(scope[1].z - scope[0].z));
 
-        //LOAD WAVE MODEL
+        waveModel = LoadModel("assets/obj/wave.obj");
+        waveModel.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/wave.png");
     }
 
     void update()
     {
         cam->viewScope(scope);
-        for(int i = 0; i < waveCount; i++) {
+        
+        for(int i = 0; i < wavePos.size(); i++)
+        {
             wavePos[i]->x += waveSpeed;
 
-            if(wavePos[i]->x > scope[0].x + 2) {
-                wavePos[i]->x = scope[2].x - 2;
-                wavePos[i]->z = GetRandomValue(scope[0].z, scope[1].z);
+            if(wavePos[i]->x > scope[0].x + 5) {
+                std::cout<<"deleting top\n";
+                delete wavePos[i];
+                wavePos.erase(wavePos.begin() + i);
+                if(tempScope[0].x - scope[0].x > 1){createWave("bottom");}
             }
-            else if (wavePos[i]->x < scope[2].x - 2) {
-                wavePos[i]->x = scope[0].x + 2;
-                wavePos[i]->z = GetRandomValue(scope[0].z, scope[1].z);
+            else if (wavePos[i]->x < scope[2].x - 5) {
+                std::cout<<"deleting bottom\n";
+                delete wavePos[i];
+                wavePos.erase(wavePos.begin() + i);
+                if(tempScope[0].x - scope[0].x > 1){createWave("top");}
             }
-            else if (wavePos[i]->z > scope[1].z + 2) {
-                wavePos[i]->z = scope[0].z + 2;
-                wavePos[i]->x = GetRandomValue(scope[2].x, scope[0].x);
+            
+            if(wavePos[i]->z > scope[1].z + 5) {
+                std::cout<<"deleting right\n";
+                delete wavePos[i];
+                wavePos.erase(wavePos.begin() + i);
+                createWave("left");
             }
-            else if (wavePos[i]->z < scope[0].z - 2) {
-                wavePos[i]->z = scope[1].z - 2;
-                wavePos[i]->x = GetRandomValue(scope[2].x, scope[0].x);
+            else if (wavePos[i]->z < scope[0].z - 5) {
+                std::cout<<"deleting left\n";
+                delete wavePos[i];
+                wavePos.erase(wavePos.begin() + i);
+                createWave("right");
             }
+
         }
+        waveCount = wavePos.size();
+        createWave(tempScope);
+        tempScope = scope;
+
     }
 
     void drawWaves()
     {
         for(int i = 0; i < waveCount; i++) {
-            DrawCube(*wavePos[i], 0.5f, 0.5f, 0.5f, WHITE);
+            DrawModel(waveModel, *wavePos[i], 1.0f, WHITE);
         }
     }
 
@@ -144,7 +242,9 @@ public:
             delete wavePos.back();
             wavePos.pop_back();
         }
-        //UNLOAD WAVE MODEL
+
+        UnloadTexture(waveModel.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
+        UnloadModel(waveModel);
     }
 
 };
@@ -237,10 +337,10 @@ public:
         GetFrameTime();
 
         //buoyancy angle calculation
-        buoyancyPeriod += 0.5*(baseSpeed + throttle);
+        buoyancyPeriod += 0.025;
         position.y = 0.5 + 0.5*sin(0.1*buoyancyPeriod);
         buoyancyAngle = 10*sin(buoyancyPeriod);
-        // if(buoyancyPeriod >= 2*PI) {buoyancyPeriod = 0;}
+        // if(buoyancyPeriod % (2*PI) && buoyancyPeriod != 0) {buoyancyPeriod = 0;}
         
         //model rotation using local axis
         deck.transform = MatrixIdentity();
@@ -302,7 +402,7 @@ int main(void)
 
     MyCam camera({0, 0, 0});
     MKapal main_kapal({0, 1.5, 0}, 0, &camera);
-    Ocean ocean(100, &camera, 0.01, 0.1);
+    Ocean ocean(100, &camera, 0.01, 0.025);
     int gamestate = GAMEPLAY;
 
     float deltaTime;
@@ -330,7 +430,7 @@ int main(void)
                 ocean.update();
 
                 //game draw
-                DrawGrid(1000, 1);
+                // DrawGrid(1000, 1);
                 main_kapal.draw();
                 ocean.drawWaves();
 
@@ -341,6 +441,7 @@ int main(void)
 
         EndDrawing();
 
+        frameCounter++;
     }
     CloseWindow();
     return 0;
