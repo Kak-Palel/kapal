@@ -8,9 +8,22 @@
 
 const int screenWidth = 2560;
 const int screenHeight = 1600;
+const float GRAVITY = 0.098f;
+// const float GRAVITY = 0.00f;
 
 enum {MENU = 0, SETTING, GAMEPLAY, PAUSE, DEAD};
 unsigned long long int frameCounter = 0;
+
+struct ShipHitbox
+{
+    BoundingBox rail;
+    BoundingBox deck;
+    float* health;
+};
+std::vector<ShipHitbox*> ShipHitboxes;
+
+int scrSize(int pixLen, char axis);
+Vector3 normalizeVector3(Vector3 v);
 
 class MyCam
 {
@@ -94,7 +107,7 @@ private:
             waveCount++;
         }
     }
-    
+
     void createWave(std::vector<Vector3>& oldScope)
     {
         int targetWave = waveDensity*(scope[0].x - scope[2].x)*(scope[1].z - scope[0].z);
@@ -128,12 +141,12 @@ private:
             }
         }
     }
-    
+
     void createWave(const std::string side)
     {
         if(side == "bottom")
         {
-            std::cout<<"bottom\n";
+            // std::cout<<"bottom\n";
             Vector3* temp = new Vector3();
             temp->x = scope[2].x - GetRandomValue(1, 4);
             temp->y = 0;
@@ -143,7 +156,7 @@ private:
         }
         else if(side == "top")
         {
-            std::cout<<"top\n";
+            // std::cout<<"top\n";
             Vector3* temp = new Vector3();
             temp->x = scope[0].x + GetRandomValue(1, 4);
             temp->y = 0;
@@ -153,7 +166,7 @@ private:
         }
         else if(side == "left")
         {
-            std::cout<<"left\n";
+            // std::cout<<"left\n";
             Vector3* temp = new Vector3();
             temp->x = GetRandomValue(scope[2].x, scope[0].x);
             temp->y = 0;
@@ -163,7 +176,7 @@ private:
         }
         else if(side == "right")
         {
-            std::cout<<"right\n";
+            // std::cout<<"right\n";
             Vector3* temp = new Vector3();
             temp->x = GetRandomValue(scope[2].x, scope[0].x);
             temp->y = 0;
@@ -172,7 +185,6 @@ private:
             waveCount++;
         }
     }
-
 
 public:
     Ocean(int max_wave, MyCam* camera , float wave_speed, float wave_density)
@@ -248,12 +260,93 @@ public:
 
 };
 
+class Bullet
+{
+    private:
+    Vector3 position;
+    Vector3 direction;
+    float speed;
+    float damage;
+    float downSpeed;
+    bool isAlive;
+    float radius;
+    std::vector<Vector3> trails;
+
+    public:
+    Bullet(Vector3 pos, Vector3 directionVec, float speed = 0.3, float dmg = 10, float radius = 0.25) : position(pos), damage(dmg), isAlive(true)
+    {
+        this->speed = speed;
+        this->direction = normalizeVector3(directionVec);
+
+        this->downSpeed = -1*directionVec.y;
+
+        this->radius = radius;
+    }
+    ~Bullet() {}
+
+    void update()
+    {
+        position.x += direction.x * speed;
+        position.z += direction.z * speed;
+
+        position.y -= downSpeed;
+        downSpeed += GRAVITY/60;
+
+        if(position.y < -1) {isAlive = false; return;}
+
+        //check collision
+        for(int i = 0; i < ShipHitboxes.size(); i++)
+        {
+            if(CheckCollisionBoxSphere(ShipHitboxes[i]->rail, position, radius) || CheckCollisionBoxSphere(ShipHitboxes[i]->deck, position, radius))
+            {
+                *(ShipHitboxes[i]->health) -= damage;
+                isAlive = false;
+            }
+        }
+
+    }
+
+    void draw()
+    {
+        DrawSphere(position, radius, BLACK);
+        if(frameCounter%7 == 0)
+        {
+            trails.push_back(position);
+        }
+
+        for(int i = 0; i < trails.size(); i++)
+        {
+            DrawSphere(trails[i], radius - 0.025*i, GRAY);
+        }
+    }
+
+    bool alive()
+    {
+        return isAlive;
+    }
+
+    void kill()
+    {
+        isAlive = false;
+    }
+
+    Vector3 getPos()
+    {
+        return position;
+    }
+
+};
+std::vector<Bullet*> Bullets;
+
+
 class Kapal
 {
     private:
 
     protected:
+    ShipHitbox hitboxes;
     Vector3 position;
+    float health;
     virtual void draw() {DrawCube(position, 1.0f, 2.0f, 2.0f, RED);}
     virtual void move() {}
     
@@ -262,7 +355,7 @@ class Kapal
     ~Kapal() {}
 };
 
-class MKapal : Kapal
+class MKapal : public Kapal
 {
 private:
     float scale;
@@ -281,15 +374,16 @@ private:
 
     void determineLocalAxis()
     {
-        localAxis[0] = Vector3Normalize((Vector3){position.x*sin((angle)*DEG2RAD), 0, position.z*cos((angle)*DEG2RAD)});
+        localAxis[0] = normalizeVector3((Vector3){position.x*sin((angle)*DEG2RAD), 0, position.z*cos((angle)*DEG2RAD)});
         localAxis[1] = (Vector3){0, 1, 0};
-        localAxis[2] = Vector3Normalize(Vector3CrossProduct(localAxis[0], localAxis[1]));
+        localAxis[2] = normalizeVector3(Vector3CrossProduct(localAxis[0], localAxis[1]));
     }
+
 public:
     MKapal(Vector3 pos, float initAngle, MyCam* cam) : Kapal(pos)
     {
         camera = cam;
-        
+
         railing = LoadModel("assets/obj/ship/railing.obj");
         std::cout<<"railing: "<<railing.meshCount<<std::endl;
         canons = LoadModel("assets/obj/ship/canons.obj");
@@ -300,6 +394,12 @@ public:
         deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/deck.png");
         railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/railing.png");
         canons.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/canons.png");
+
+        // hitboxes = new ShipHitbox();
+        hitboxes.health = &health;
+        hitboxes.deck = GetModelBoundingBox(deck);
+        hitboxes.rail = GetModelBoundingBox(railing);
+        ShipHitboxes.push_back(&hitboxes);
 
         scale = 0.25f;
         angle = initAngle + 90;
@@ -378,6 +478,46 @@ public:
             CameraMoveForward(camera->getCam(), zoomMove, false);
         }
         determineLocalAxis();
+
+        hitboxes.deck = GetModelBoundingBox(deck);
+        hitboxes.rail = GetModelBoundingBox(railing);
+
+        //shoot
+        if(IsKeyReleased(KEY_RIGHT))
+        {
+            Vector3 direction = normalizeVector3(Vector3Subtract(camera->getPos(), position));
+            
+            Vector3 bulletPos = position;
+            bulletPos.y += 0.5;
+            bulletPos.z -= 1.5*cos((angle)*DEG2RAD);
+            bulletPos.x -= 1.5*sin((angle)*DEG2RAD);
+
+            Vector3 bulletDir;
+            bulletDir.x = sin((angle - 90)*DEG2RAD);
+            bulletDir.z = cos((angle - 90)*DEG2RAD);
+            bulletDir.y = sin(tempRoll*DEG2RAD);
+
+            Bullet* temp = new Bullet(bulletPos, bulletDir);
+            Bullets.push_back(temp);
+        }
+        
+        if(IsKeyReleased(KEY_LEFT))
+        {
+            Vector3 direction = normalizeVector3(Vector3Subtract(camera->getPos(), position));
+            
+            Vector3 bulletPos = position;
+            bulletPos.y += 0.5;
+            bulletPos.z -= 1.5*cos((angle)*DEG2RAD);
+            bulletPos.x -= 1.5*sin((angle)*DEG2RAD);
+
+            Vector3 bulletDir;
+            bulletDir.x = -1*sin((angle - 90)*DEG2RAD);
+            bulletDir.z = -1*cos((angle - 90)*DEG2RAD);
+            bulletDir.y = -1*sin(tempRoll*DEG2RAD);
+
+            Bullet* temp = new Bullet(bulletPos, bulletDir);
+            Bullets.push_back(temp);
+        }
     }
 
     Vector3 getPos()
@@ -404,6 +544,12 @@ int scrSize(int pixLen, char axis)
     else if(axis == 'y') {return (int)((float)pixLen/maxScrY)*(float)screenHeight;}
     std::cout<<"invalid screen axis!!!\n";
     std::exit(1);
+}
+
+Vector3 normalizeVector3(Vector3 v)
+{
+    float length = sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
+    return {v.x/length, v.y/length, v.z/length};
 }
 
 int main(void)
@@ -438,9 +584,22 @@ int main(void)
                 //game update
                 main_kapal.move();
                 ocean.update();
+                for(int i = 0; i < Bullets.size(); i++)
+                {
+                    Bullets[i]->update();
+                    if(!Bullets[i]->alive())
+                    {
+                        delete Bullets[i];
+                        Bullets.erase(Bullets.begin() + i);
+                    }
+                }
 
                 //game draw
                 // DrawGrid(1000, 1);
+                for(int i = 0; i < Bullets.size(); i++)
+                {
+                    Bullets[i]->draw();
+                }
                 main_kapal.draw();
                 ocean.drawWaves();
 
