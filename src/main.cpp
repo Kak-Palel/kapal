@@ -102,9 +102,8 @@ private:
         {
             while(waveCount > targetWave)
             {
-                int idx = GetRandomValue(0, wavePos.size() - 1);
-                delete wavePos[idx];
-                wavePos.erase(wavePos.begin() + idx);
+                delete wavePos[wavePos.size() - 1];
+                wavePos.erase(wavePos.end());
                 waveCount--;
             }
             return;
@@ -197,26 +196,26 @@ public:
             wavePos[i]->x += waveSpeed;
 
             if(wavePos[i]->x > scope[0].x + 5) {
-                std::cout<<"deleting top\n";
+                // std::cout<<"deleting top\n";
                 delete wavePos[i];
                 wavePos.erase(wavePos.begin() + i);
                 if(tempScope[0].x - scope[0].x > 1){createWave("bottom");}
             }
             else if (wavePos[i]->x < scope[2].x - 5) {
-                std::cout<<"deleting bottom\n";
+                // std::cout<<"deleting bottom\n";
                 delete wavePos[i];
                 wavePos.erase(wavePos.begin() + i);
                 if(tempScope[0].x - scope[0].x > 1){createWave("top");}
             }
             
             if(wavePos[i]->z > scope[1].z + 5) {
-                std::cout<<"deleting right\n";
+                // std::cout<<"deleting right\n";
                 delete wavePos[i];
                 wavePos.erase(wavePos.begin() + i);
                 createWave("left");
             }
             else if (wavePos[i]->z < scope[0].z - 5) {
-                std::cout<<"deleting left\n";
+                // std::cout<<"deleting left\n";
                 delete wavePos[i];
                 wavePos.erase(wavePos.begin() + i);
                 createWave("right");
@@ -260,7 +259,7 @@ class Kapal
     
     public:
     Kapal(Vector3 pos) : position(pos) {}
-    virtual ~Kapal() {}
+    ~Kapal() {}
 };
 
 class MKapal : Kapal
@@ -269,6 +268,7 @@ private:
     float scale;
     Model deck;
     Model railing;
+    Model canons;
     float throttle;
     float dist_cam2kapal;
     MyCam* camera;
@@ -292,11 +292,14 @@ public:
         
         railing = LoadModel("assets/obj/ship/railing.obj");
         std::cout<<"railing: "<<railing.meshCount<<std::endl;
+        canons = LoadModel("assets/obj/ship/canons.obj");
+        std::cout<<"canons: "<<canons.meshCount<<std::endl;
         deck = LoadModel("assets/obj/ship/deck.obj");
         std::cout<<"deck: "<<deck.meshCount<<std::endl;
 
         deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/deck.png");
         railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/railing.png");
+        canons.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/canons.png");
 
         scale = 0.25f;
         angle = initAngle + 90;
@@ -316,6 +319,7 @@ public:
     {
         DrawModel(deck, {position.x, position.y + 1.5f, position.z}, scale, GRAY);
         DrawModel(railing, {position.x, position.y + 1.5f, position.z}, scale, WHITE);
+        DrawModel(canons, {position.x, position.y + 1.5f, position.z}, scale, WHITE);
     }
 
     void move() override
@@ -351,6 +355,10 @@ public:
         railing.transform = MatrixMultiply(railing.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
         railing.transform = MatrixMultiply(railing.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
         railing.transform = MatrixMultiply(railing.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
+        canons.transform = MatrixIdentity();
+        canons.transform = MatrixMultiply(canons.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
+        canons.transform = MatrixMultiply(canons.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
+        canons.transform = MatrixMultiply(canons.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
 
         position.x += (baseSpeed + throttle) * sin(angle * DEG2RAD);
         position.z += (baseSpeed + throttle) * cos(angle * DEG2RAD);
@@ -381,8 +389,10 @@ public:
     {
         UnloadTexture(deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
         UnloadTexture(railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
+        UnloadTexture(canons.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
         UnloadModel(deck);
         UnloadModel(railing);
+        UnloadModel(canons);
     }
 };
 
