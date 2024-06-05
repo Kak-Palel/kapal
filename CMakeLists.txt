@@ -10,7 +10,8 @@ set(projectSOURCES
 
 )
 
-include_directories(/raylib/raylib/src)
+# include_directories(/raylib/raylib/src)
+include_directories(/home/olel/Projects/raylib/src)
 
 add_executable(${PROJECT_NAME} ${projectSOURCES} ${projectHEADERS})
 
