@@ -237,7 +237,6 @@ public:
         waveCount = wavePos.size();
         createWave(tempScope);
         tempScope = scope;
-
     }
 
     void drawWaves()
@@ -257,7 +256,6 @@ public:
         UnloadTexture(waveModel.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
         UnloadModel(waveModel);
     }
-
 };
 
 class Bullet
@@ -344,34 +342,27 @@ class Kapal
     private:
 
     protected:
-    ShipHitbox hitboxes;
-    Vector3 position;
-    float health;
-    virtual void draw() {DrawCube(position, 1.0f, 2.0f, 2.0f, RED);}
-    virtual void move() {}
-    
-    public:
-    Kapal(Vector3 pos) : position(pos) {}
-    ~Kapal() {}
-};
+    // Model deck;
+    // Model railing;
+    // Model canons;
 
-class MKapal : public Kapal
-{
-private:
+    Model model;
     float scale;
-    Model deck;
-    Model railing;
-    Model canons;
-    float throttle;
-    float dist_cam2kapal;
-    MyCam* camera;
+    ShipHitbox hitboxes;
+    
+    float health;
 
+    Vector3 position;
+    Vector3 localAxis[3];
     float angle;
     float buoyancyPeriod;
     float buoyancyAngle;
-    Vector3 localAxis[3];
     float tempRoll;
+    float throttle;
 
+    // virtual void draw() {DrawCube(position, 1.0f, 2.0f, 2.0f, RED);}
+    virtual void move() {}
+    
     void determineLocalAxis()
     {
         localAxis[0] = normalizeVector3((Vector3){position.x*sin((angle)*DEG2RAD), 0, position.z*cos((angle)*DEG2RAD)});
@@ -379,26 +370,68 @@ private:
         localAxis[2] = normalizeVector3(Vector3CrossProduct(localAxis[0], localAxis[1]));
     }
 
+    public:
+    Kapal(Vector3 pos) : position(pos)
+    {
+        model = LoadModel("assets/obj/ship/allShip.obj");
+    }
+    
+    void draw()
+    {
+        // DrawModel(deck, {position.x, position.y + 1.5f, position.z}, scale, GRAY);
+        // DrawModel(railing, {position.x, position.y + 1.5f, position.z}, scale, WHITE);
+        // DrawModel(canons, {position.x, position.y + 1.5f, position.z}, scale, WHITE);
+
+        DrawModel(model, {position.x, position.y + 1.5f, position.z}, scale, WHITE);
+    }
+    
+    Vector3 getPos()
+    {
+        return position;
+    }
+
+    ~Kapal()
+    {
+    //     UnloadTexture(deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
+    //     UnloadTexture(railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
+    //     UnloadTexture(canons.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
+    //     UnloadModel(deck);
+    //     UnloadModel(railing);
+    //     UnloadModel(canons);
+        UnloadModel(model);
+    }
+};
+
+class MKapal : public Kapal
+{
+private:
+
+    float dist_cam2kapal;
+    MyCam* camera;
+
+
 public:
     MKapal(Vector3 pos, float initAngle, MyCam* cam) : Kapal(pos)
     {
         camera = cam;
 
-        railing = LoadModel("assets/obj/ship/railing.obj");
-        std::cout<<"railing: "<<railing.meshCount<<std::endl;
-        canons = LoadModel("assets/obj/ship/canons.obj");
-        std::cout<<"canons: "<<canons.meshCount<<std::endl;
-        deck = LoadModel("assets/obj/ship/deck.obj");
-        std::cout<<"deck: "<<deck.meshCount<<std::endl;
+        // std::cout<<"loading player ships assets: \n";
+        // deck = LoadModel("assets/obj/ship/deck.obj");
+        // railing = LoadModel("assets/obj/ship/railing.obj");
+        // canons = LoadModel("assets/obj/ship/canons.obj");
 
-        deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/deck.png");
-        railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/railing.png");
-        canons.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/canons.png");
+        // railing.materials = (Material*)malloc(2*sizeof(Material));
+        // canons.materials = (Material*)malloc(2*sizeof(Material));
+        // deck.materials = (Material*)malloc(2*sizeof(Material));
+
+        // deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/deck.png");
+        // railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/railing.png");
+        // canons.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/canons.png");
 
         // hitboxes = new ShipHitbox();
         hitboxes.health = &health;
-        hitboxes.deck = GetModelBoundingBox(deck);
-        hitboxes.rail = GetModelBoundingBox(railing);
+        // hitboxes.deck = GetModelBoundingBox(deck);
+        // hitboxes.rail = GetModelBoundingBox(railing);
         ShipHitboxes.push_back(&hitboxes);
 
         scale = 0.25f;
@@ -415,12 +448,6 @@ public:
         localAxis[2] = {0, 0, 1};
     }
 
-    void draw() override
-    {
-        DrawModel(deck, {position.x, position.y + 1.5f, position.z}, scale, GRAY);
-        DrawModel(railing, {position.x, position.y + 1.5f, position.z}, scale, WHITE);
-        DrawModel(canons, {position.x, position.y + 1.5f, position.z}, scale, WHITE);
-    }
 
     void move() override
     {
@@ -447,18 +474,22 @@ public:
         // if(buoyancyPeriod % (2*PI) && buoyancyPeriod != 0) {buoyancyPeriod = 0;}
         
         //model rotation using local axis
-        deck.transform = MatrixIdentity();
-        deck.transform = MatrixMultiply(deck.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
-        deck.transform = MatrixMultiply(deck.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
-        deck.transform = MatrixMultiply(deck.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
-        railing.transform = MatrixIdentity();
-        railing.transform = MatrixMultiply(railing.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
-        railing.transform = MatrixMultiply(railing.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
-        railing.transform = MatrixMultiply(railing.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
-        canons.transform = MatrixIdentity();
-        canons.transform = MatrixMultiply(canons.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
-        canons.transform = MatrixMultiply(canons.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
-        canons.transform = MatrixMultiply(canons.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
+        // deck.transform = MatrixIdentity();
+        // deck.transform = MatrixMultiply(deck.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
+        // deck.transform = MatrixMultiply(deck.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
+        // deck.transform = MatrixMultiply(deck.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
+        // railing.transform = MatrixIdentity();
+        // railing.transform = MatrixMultiply(railing.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
+        // railing.transform = MatrixMultiply(railing.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
+        // railing.transform = MatrixMultiply(railing.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
+        // canons.transform = MatrixIdentity();
+        // canons.transform = MatrixMultiply(canons.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
+        // canons.transform = MatrixMultiply(canons.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
+        // canons.transform = MatrixMultiply(canons.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
+        model.transform = MatrixIdentity();
+        model.transform = MatrixMultiply(model.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
+        model.transform = MatrixMultiply(model.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
+        model.transform = MatrixMultiply(model.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
 
         position.x += (baseSpeed + throttle) * sin(angle * DEG2RAD);
         position.z += (baseSpeed + throttle) * cos(angle * DEG2RAD);
@@ -479,8 +510,8 @@ public:
         }
         determineLocalAxis();
 
-        hitboxes.deck = GetModelBoundingBox(deck);
-        hitboxes.rail = GetModelBoundingBox(railing);
+        // hitboxes.deck = GetModelBoundingBox(deck);
+        // hitboxes.rail = GetModelBoundingBox(railing);
 
         //shoot
         if(IsKeyReleased(KEY_RIGHT))
@@ -519,20 +550,42 @@ public:
             Bullets.push_back(temp);
         }
     }
+};
 
-    Vector3 getPos()
+class EKapal : public Kapal
+{
+    public:
+    EKapal(Vector3 pos, float initAngle) : Kapal(pos)
     {
-        return position;
-    }
+        // std::cout<<"loading enemy ships assets: \n";
+        // railing = LoadModel("assets/obj/ship/railing.obj");
+        // std::cout<<"finished loading railing, loading canon...\n";
+        // canons = LoadModel("assets/obj/ship/canons.obj");
+        // std::cout<<"finished loading canons, loading deck...\n";
+        // deck = LoadModel("assets/obj/ship/deck.obj");
 
-    ~MKapal()
-    {
-        UnloadTexture(deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
-        UnloadTexture(railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
-        UnloadTexture(canons.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
-        UnloadModel(deck);
-        UnloadModel(railing);
-        UnloadModel(canons);
+        // deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/deck.png");
+        // railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/railing.png");
+        // canons.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/canons.png");
+
+        scale = 0.25f;
+        angle = initAngle + 90;
+
+        // hitboxes = new ShipHitbox();
+        hitboxes.health = &health;
+        // hitboxes.deck = GetModelBoundingBox(deck);
+        // hitboxes.rail = GetModelBoundingBox(railing);
+        ShipHitboxes.push_back(&hitboxes);
+
+        throttle = 0;
+        tempRoll = 0;
+
+        buoyancyPeriod = 0;
+        buoyancyAngle = 0;
+
+        localAxis[0] = {1, 0, 0};
+        localAxis[1] = {0, 1, 0};   
+        localAxis[2] = {0, 0, 1};
     }
 };
 
@@ -556,14 +609,25 @@ int main(void)
 {
     InitWindow(screenWidth, screenHeight, "KAPAL");
 
+    // Model deck = LoadModel("assets/obj/ship/deck.obj");
+    // Model railing = LoadModel("assets/obj/ship/railing.obj");
+    // Model canons = LoadModel("assets/obj/ship/canons.obj");
+    // Model allShip = LoadModel("assets/obj/ship/allShip.fbx");
+    // std::cout<<"cobaCompleteeeeee\n";
+
     MyCam camera({0, 0, 0});
+    std::cout<<"starting loop1\n";
     MKapal main_kapal({0, 1.5, 0}, 0, &camera);
+    EKapal enemy_kapal({10, 1.5, 10}, 0);
+    std::cout<<"starting loop2\n";
     Ocean ocean(100, &camera, 0.01, 0.025);
+    std::cout<<"starting loop3\n";
     int gamestate = GAMEPLAY;
 
     float deltaTime;
     ToggleFullscreen();
     SetTargetFPS(60);
+
 
     while (!WindowShouldClose())
     {
@@ -601,6 +665,7 @@ int main(void)
                     Bullets[i]->draw();
                 }
                 main_kapal.draw();
+                enemy_kapal.draw();
                 ocean.drawWaves();
 
             EndMode3D();
