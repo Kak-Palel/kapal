@@ -9,6 +9,8 @@
 const int screenWidth = 2560;
 const int screenHeight = 1600;
 const float GRAVITY = 0.098f;
+
+const Color SEABLUE = {29,162,216};
 // const float GRAVITY = 0.00f;
 
 enum {MENU = 0, SETTING, GAMEPLAY, PAUSE, DEAD};
@@ -342,11 +344,8 @@ class Kapal
     private:
 
     protected:
-    // Model deck;
-    // Model railing;
-    // Model canons;
-
     Model model;
+
     float scale;
     ShipHitbox hitboxes;
     
@@ -359,6 +358,10 @@ class Kapal
     float buoyancyAngle;
     float tempRoll;
     float throttle;
+    
+    int cooldown;
+    int cooldownTimer_R;
+    int cooldownTimer_L;
 
     // virtual void draw() {DrawCube(position, 1.0f, 2.0f, 2.0f, RED);}
     virtual void move() {}
@@ -368,20 +371,57 @@ class Kapal
         localAxis[0] = normalizeVector3((Vector3){position.x*sin((angle)*DEG2RAD), 0, position.z*cos((angle)*DEG2RAD)});
         localAxis[1] = (Vector3){0, 1, 0};
         localAxis[2] = normalizeVector3(Vector3CrossProduct(localAxis[0], localAxis[1]));
+
+        if(angle < 0)
+        {
+            angle = 360 + angle;
+        }
+        if(angle >= 360)
+        {
+            angle -= 360;
+        }
     }
 
     public:
     Kapal(Vector3 pos) : position(pos)
     {
+        cooldown = 60;
+        cooldownTimer_R = 0;
+        cooldownTimer_L = 0;
         model = LoadModel("assets/obj/ship/allShip.obj");
+    }
+
+    void shoot(bool right)
+    {
+        if(right && cooldownTimer_R > 0) {return;}
+        else if(!right && cooldownTimer_L > 0) {return;}
+        
+        if(right) {cooldownTimer_R = cooldown;}
+        else {cooldownTimer_L = cooldown;}
+        
+        Vector3 bulletPos = position;
+        bulletPos.y += 0.5;
+        bulletPos.z -= 1.5*cos((angle)*DEG2RAD);
+        bulletPos.x -= 1.5*sin((angle)*DEG2RAD);
+        
+        Vector3 bulletDir;
+        bulletDir.x = sin((angle - 90)*DEG2RAD);
+        bulletDir.z = cos((angle - 90)*DEG2RAD);
+        bulletDir.y = sin(tempRoll*DEG2RAD);
+
+        if(!right)
+        {
+            bulletDir.x *= -1;
+            bulletDir.y *= -1;
+            bulletDir.z *= -1;
+        }
+        
+        Bullet* temp = new Bullet(bulletPos, bulletDir);
+        Bullets.push_back(temp);
     }
     
     void draw()
     {
-        // DrawModel(deck, {position.x, position.y + 1.5f, position.z}, scale, GRAY);
-        // DrawModel(railing, {position.x, position.y + 1.5f, position.z}, scale, WHITE);
-        // DrawModel(canons, {position.x, position.y + 1.5f, position.z}, scale, WHITE);
-
         DrawModel(model, {position.x, position.y + 1.5f, position.z}, scale, WHITE);
     }
     
@@ -390,14 +430,13 @@ class Kapal
         return position;
     }
 
+    float getAngle()
+    {
+        return angle;
+    }
+
     ~Kapal()
     {
-    //     UnloadTexture(deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
-    //     UnloadTexture(railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
-    //     UnloadTexture(canons.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
-    //     UnloadModel(deck);
-    //     UnloadModel(railing);
-    //     UnloadModel(canons);
         UnloadModel(model);
     }
 };
@@ -415,27 +454,11 @@ public:
     {
         camera = cam;
 
-        // std::cout<<"loading player ships assets: \n";
-        // deck = LoadModel("assets/obj/ship/deck.obj");
-        // railing = LoadModel("assets/obj/ship/railing.obj");
-        // canons = LoadModel("assets/obj/ship/canons.obj");
-
-        // railing.materials = (Material*)malloc(2*sizeof(Material));
-        // canons.materials = (Material*)malloc(2*sizeof(Material));
-        // deck.materials = (Material*)malloc(2*sizeof(Material));
-
-        // deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/deck.png");
-        // railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/railing.png");
-        // canons.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/canons.png");
-
-        // hitboxes = new ShipHitbox();
         hitboxes.health = &health;
-        // hitboxes.deck = GetModelBoundingBox(deck);
-        // hitboxes.rail = GetModelBoundingBox(railing);
         ShipHitboxes.push_back(&hitboxes);
 
         scale = 0.25f;
-        angle = initAngle + 90;
+        angle = 90 + initAngle;
 
         throttle = 0;
         tempRoll = 0;
@@ -472,20 +495,7 @@ public:
         position.y = 0.5 + 0.5*sin(0.1*buoyancyPeriod);
         buoyancyAngle = 10*sin(buoyancyPeriod);
         // if(buoyancyPeriod % (2*PI) && buoyancyPeriod != 0) {buoyancyPeriod = 0;}
-        
-        //model rotation using local axis
-        // deck.transform = MatrixIdentity();
-        // deck.transform = MatrixMultiply(deck.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
-        // deck.transform = MatrixMultiply(deck.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
-        // deck.transform = MatrixMultiply(deck.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
-        // railing.transform = MatrixIdentity();
-        // railing.transform = MatrixMultiply(railing.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
-        // railing.transform = MatrixMultiply(railing.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
-        // railing.transform = MatrixMultiply(railing.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
-        // canons.transform = MatrixIdentity();
-        // canons.transform = MatrixMultiply(canons.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
-        // canons.transform = MatrixMultiply(canons.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
-        // canons.transform = MatrixMultiply(canons.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
+
         model.transform = MatrixIdentity();
         model.transform = MatrixMultiply(model.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
         model.transform = MatrixMultiply(model.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
@@ -504,77 +514,113 @@ public:
         dist_cam2kapal = Vector3Distance(position, camera->getPos());
         float zoomMove = GetMouseWheelMove();
         
-        if((dist_cam2kapal > 2 && zoomMove > 0) || (dist_cam2kapal < 30 && zoomMove < 0))
+        if((dist_cam2kapal > 2 && zoomMove > 0) || (dist_cam2kapal < 100 && zoomMove < 0))
         {
             CameraMoveForward(camera->getCam(), zoomMove, false);
         }
         determineLocalAxis();
 
-        // hitboxes.deck = GetModelBoundingBox(deck);
-        // hitboxes.rail = GetModelBoundingBox(railing);
-
         //shoot
-        if(IsKeyReleased(KEY_RIGHT))
-        {
-            Vector3 direction = normalizeVector3(Vector3Subtract(camera->getPos(), position));
-            
-            Vector3 bulletPos = position;
-            bulletPos.y += 0.5;
-            bulletPos.z -= 1.5*cos((angle)*DEG2RAD);
-            bulletPos.x -= 1.5*sin((angle)*DEG2RAD);
+        if(IsKeyReleased(KEY_RIGHT)){shoot(true);}
+        if(IsKeyReleased(KEY_LEFT)){shoot(false);}
 
-            Vector3 bulletDir;
-            bulletDir.x = sin((angle - 90)*DEG2RAD);
-            bulletDir.z = cos((angle - 90)*DEG2RAD);
-            bulletDir.y = sin(tempRoll*DEG2RAD);
-
-            Bullet* temp = new Bullet(bulletPos, bulletDir);
-            Bullets.push_back(temp);
-        }
-        
-        if(IsKeyReleased(KEY_LEFT))
-        {
-            Vector3 direction = normalizeVector3(Vector3Subtract(camera->getPos(), position));
-            
-            Vector3 bulletPos = position;
-            bulletPos.y += 0.5;
-            bulletPos.z -= 1.5*cos((angle)*DEG2RAD);
-            bulletPos.x -= 1.5*sin((angle)*DEG2RAD);
-
-            Vector3 bulletDir;
-            bulletDir.x = -1*sin((angle - 90)*DEG2RAD);
-            bulletDir.z = -1*cos((angle - 90)*DEG2RAD);
-            bulletDir.y = -1*sin(tempRoll*DEG2RAD);
-
-            Bullet* temp = new Bullet(bulletPos, bulletDir);
-            Bullets.push_back(temp);
-        }
+        if(cooldownTimer_R > 0) {cooldownTimer_R--;}
+        if(cooldownTimer_L > 0) {cooldownTimer_L--;}
     }
 };
 
 class EKapal : public Kapal
 {
-    public:
-    EKapal(Vector3 pos, float initAngle) : Kapal(pos)
+    private:
+    Kapal* target;
+    float angleToFace;
+
+    std::vector<bool> control()
     {
-        // std::cout<<"loading enemy ships assets: \n";
-        // railing = LoadModel("assets/obj/ship/railing.obj");
-        // std::cout<<"finished loading railing, loading canon...\n";
-        // canons = LoadModel("assets/obj/ship/canons.obj");
-        // std::cout<<"finished loading canons, loading deck...\n";
-        // deck = LoadModel("assets/obj/ship/deck.obj");
+        //TODO: FIX AI-------------------------------------------------------------------------------------------------------------------
+        const float minDistToAttack = 0.0f;
+        const float angleTolerance = 15;
+        std::vector<bool> movement = {false,  //W 
+                                      false,  //A
+                                      false,  //S
+                                      false}; //D
 
-        // deck.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/deck.png");
-        // railing.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/railing.png");
-        // canons.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/ship/canons.png");
+        angleToFace = atan2f(position.x - target->getPos().x, position.z - target->getPos().z)*RAD2DEG + 180;
 
+        if(Vector3Distance(target->getPos(), this->position) >= minDistToAttack)
+        {
+            movement[0] = true;
+            float angleBetween = this->angleToFace - this->angle;
+            if(angleBetween <= 180 && abs(angleBetween) > 5 && angleBetween > 0)
+            {
+                movement[1] = true;
+            }
+            else if((angleBetween > 180 || angleBetween < 0) && abs(angleBetween) > 5)
+            {
+                movement[3] = !movement[1];
+            }
+        }
+        return movement;
+    }
+
+    public:
+    void move() override
+    {
+        const float maxThrottle = 0.075;
+        const float baseSpeed = 0.005;
+        const float maxRoll = 15;
+
+        std::vector<bool> movement = control();
+
+        //movement angle calculation
+        if(movement[0] && throttle <= maxThrottle) {throttle += 0.001;}
+        if(movement[1] && tempRoll > -1*maxRoll ) {tempRoll -= (baseSpeed + throttle) * 3;}
+        if(movement[2] && throttle > -2*baseSpeed) {throttle -= 0.001;}
+        if(movement[3] && tempRoll < maxRoll ) {tempRoll += (baseSpeed + throttle) * 3;}
+        
+        if(tempRoll > maxRoll) {tempRoll = maxRoll;}
+        else if(tempRoll < -1*maxRoll) {tempRoll = -1*maxRoll;}
+        if(tempRoll >= maxRoll/2) {angle -= (baseSpeed + throttle) * 8 * abs(sin(6*tempRoll));}
+        else if(tempRoll <= -1*maxRoll/2) {angle += (baseSpeed + throttle) * 8 * abs(sin(6*tempRoll));}
+
+        GetFrameTime();
+
+        //buoyancy angle calculation
+        buoyancyPeriod += 0.025;
+        position.y = 0.5 + 0.5*sin(0.1*buoyancyPeriod);
+        buoyancyAngle = 10*sin(buoyancyPeriod);
+        // if(buoyancyPeriod % (2*PI) && buoyancyPeriod != 0) {buoyancyPeriod = 0;}
+
+        model.transform = MatrixIdentity();
+        model.transform = MatrixMultiply(model.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
+        model.transform = MatrixMultiply(model.transform, MatrixRotate(localAxis[0], DEG2RAD * -1* tempRoll));
+        model.transform = MatrixMultiply(model.transform, MatrixRotate(localAxis[2], DEG2RAD * buoyancyAngle));
+
+        position.x += (baseSpeed + throttle) * sin(angle * DEG2RAD);
+        position.z += (baseSpeed + throttle) * cos(angle * DEG2RAD);
+
+        if(tempRoll < 0 && !movement[1]) {tempRoll += (baseSpeed + throttle) * 3;}
+        else if(tempRoll > 0 && !movement[3]) {tempRoll -= (baseSpeed + throttle) * 3;}
+
+        determineLocalAxis();
+
+        //shoot
+        if(IsKeyReleased(KEY_RIGHT)){shoot(true);}
+        if(IsKeyReleased(KEY_LEFT)){shoot(false);}
+
+        if(cooldownTimer_R > 0) {cooldownTimer_R--;}
+        if(cooldownTimer_L > 0) {cooldownTimer_L--;}
+    }
+
+    float targetAng(){return angleToFace;}
+
+    EKapal(Vector3 pos, float initAngle, Kapal* target) : Kapal(pos)
+    {
+        this->target = target;
         scale = 0.25f;
-        angle = initAngle + 90;
+        angle = 90 + initAngle;
 
-        // hitboxes = new ShipHitbox();
         hitboxes.health = &health;
-        // hitboxes.deck = GetModelBoundingBox(deck);
-        // hitboxes.rail = GetModelBoundingBox(railing);
         ShipHitboxes.push_back(&hitboxes);
 
         throttle = 0;
@@ -609,16 +655,10 @@ int main(void)
 {
     InitWindow(screenWidth, screenHeight, "KAPAL");
 
-    // Model deck = LoadModel("assets/obj/ship/deck.obj");
-    // Model railing = LoadModel("assets/obj/ship/railing.obj");
-    // Model canons = LoadModel("assets/obj/ship/canons.obj");
-    // Model allShip = LoadModel("assets/obj/ship/allShip.fbx");
-    // std::cout<<"cobaCompleteeeeee\n";
-
     MyCam camera({0, 0, 0});
     std::cout<<"starting loop1\n";
     MKapal main_kapal({0, 1.5, 0}, 0, &camera);
-    EKapal enemy_kapal({10, 1.5, 10}, 0);
+    EKapal enemy_kapal({10, 1.5, 10}, 0, &main_kapal);
     std::cout<<"starting loop2\n";
     Ocean ocean(100, &camera, 0.01, 0.025);
     std::cout<<"starting loop3\n";
@@ -642,11 +682,12 @@ int main(void)
         case SETTING:
             break;
         case GAMEPLAY:
-            ClearBackground((Color){29,162,216});
+            ClearBackground(SEABLUE);
 
             BeginMode3D(*(camera.getCam()));
                 //game update
                 main_kapal.move();
+                enemy_kapal.move();
                 ocean.update();
                 for(int i = 0; i < Bullets.size(); i++)
                 {
@@ -669,6 +710,9 @@ int main(void)
                 ocean.drawWaves();
 
             EndMode3D();
+
+            DrawText(TextFormat("angle2see: %f", enemy_kapal.targetAng()), 10, 10, 50, RED);
+            DrawText(TextFormat("anglecurr: %f", enemy_kapal.getAngle()), 10, 60, 50, RED);
 
             break;
         }
