@@ -391,6 +391,11 @@ class Kapal
         model = LoadModel("assets/obj/ship/allShip.obj");
     }
 
+    Vector3 getLocalAxis(int index)
+    {
+        return localAxis[index];
+    }
+
     void shoot(bool right)
     {
         if(right && cooldownTimer_R > 0) {return;}
@@ -538,20 +543,22 @@ class EKapal : public Kapal
     std::vector<bool> control()
     {
         //TODO: FIX AI-------------------------------------------------------------------------------------------------------------------
-        const float minDistToAttack = 0.0f;
-        const float angleTolerance = 15;
+        const float minDistToAttack = 20.0f;
+        const float angleTolerance = 5;
         std::vector<bool> movement = {false,  //W 
                                       false,  //A
                                       false,  //S
-                                      false}; //D
+                                      false,  //D
+                                      false,  //shoot right
+                                      false}; //shoot left
 
         angleToFace = atan2f(position.x - target->getPos().x, position.z - target->getPos().z)*RAD2DEG + 180;
 
+        float angleBetween = this->angleToFace - this->angle;
         if(Vector3Distance(target->getPos(), this->position) >= minDistToAttack)
         {
             movement[0] = true;
-            float angleBetween = this->angleToFace - this->angle;
-            if(angleBetween <= 180 && abs(angleBetween) > 5 && angleBetween > 0)
+            if(angleBetween <= 180 && abs(angleBetween) > angleTolerance && angleBetween > 0)
             {
                 movement[1] = true;
             }
@@ -560,6 +567,47 @@ class EKapal : public Kapal
                 movement[3] = !movement[1];
             }
         }
+        else
+        {
+            //combat
+            float halAngle = angle - target->getAngle();
+            if(halAngle < 0) {halAngle += 360;}
+            if(halAngle > 360) {halAngle -= 360;}
+            movement[0] = true;
+            if(halAngle < 180 && !(Vector3Angle(localAxis[2] , normalizeVector3(Vector3Subtract(target->getPos(), position))) * RAD2DEG < 5 || Vector3Angle(Vector3Scale(localAxis[2], -1) , normalizeVector3(Vector3Subtract(target->getPos(), position))) * RAD2DEG < 5))
+            {
+                if(halAngle > 90)
+                {
+                    movement[1] = true;
+                }
+                else
+                {
+                    movement[3] = true;
+                }
+            }
+            else if(halAngle > 180 && !(Vector3Angle(localAxis[2] , normalizeVector3(Vector3Subtract(target->getPos(), position))) * RAD2DEG < 5 || Vector3Angle(Vector3Scale(localAxis[2], -1) , normalizeVector3(Vector3Subtract(target->getPos(), position))) * RAD2DEG < 5))
+            {
+                if(halAngle < 270)
+                {
+                    movement[3] = true;
+                }
+                else
+                {
+                    movement[1] = true;
+                }
+            }
+
+        }
+        
+        if(Vector3Angle(localAxis[2] , normalizeVector3(Vector3Subtract(target->getPos(), position))) * RAD2DEG < 5)
+        {
+            movement[4] = true;
+        }
+        if(Vector3Angle(Vector3Scale(localAxis[2], -1) , normalizeVector3(Vector3Subtract(target->getPos(), position))) * RAD2DEG < 5)
+        {
+            movement[5] = true;
+        }
+
         return movement;
     }
 
@@ -605,8 +653,8 @@ class EKapal : public Kapal
         determineLocalAxis();
 
         //shoot
-        if(IsKeyReleased(KEY_RIGHT)){shoot(true);}
-        if(IsKeyReleased(KEY_LEFT)){shoot(false);}
+        if(movement[4]){shoot(true);}
+        if(movement[5]){shoot(false);}
 
         if(cooldownTimer_R > 0) {cooldownTimer_R--;}
         if(cooldownTimer_L > 0) {cooldownTimer_L--;}
