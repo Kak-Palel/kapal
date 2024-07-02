@@ -11,7 +11,6 @@ const int screenHeight = 1600;
 const float GRAVITY = 0.098f;
 
 const Color SEABLUE = {29,162,216};
-// const float GRAVITY = 0.00f;
 
 enum {MENU = 0, SETTING, GAMEPLAY, PAUSE, DEAD};
 unsigned long long int frameCounter = 0;
@@ -31,6 +30,10 @@ class MyCam
 {
     private:
     Camera* cam;
+    float shakeDuration;
+    float shakeIntensity;
+    Vector3 shakePos;
+    bool shaking;
 
     public:
     MyCam(Vector3 target)
@@ -42,6 +45,19 @@ class MyCam
         cam->fovy = 45.0f;                                // Camera field-of-view Y
         cam->projection = CAMERA_PERSPECTIVE;             // Camera projection type
 
+        shakeDuration = 0;
+        shakeIntensity = 0;
+        shakePos = cam->position;
+        shaking = false;
+    }
+
+    void shake(float duration, float intensity)
+    {
+        if(shakeDuration > 0){return;}
+        shakeDuration = duration;
+        shakeIntensity = intensity;
+        shaking = true;
+        shakePos = cam->position;
     }
 
     float getdist(Vector3 point)
@@ -62,6 +78,21 @@ class MyCam
         arr[1] = {cam->position.x + xUpperDist, 0, cam->position.z + zHalfUpperDist};
         arr[2] = {cam->position.x + xLowerDist, 0, cam->position.z + zHalfLowerDist};
         arr[3] = {cam->position.x + xLowerDist, 0, cam->position.z - zHalfLowerDist};
+
+        //shake
+        if(shakeDuration > 0)
+        {
+            cam->position.x += GetRandomValue(-1, 1)*shakeIntensity;
+            cam->position.y += GetRandomValue(-1, 1)*shakeIntensity;
+            cam->position.z += GetRandomValue(-1, 1)*shakeIntensity;
+            shakeDuration -= 1.0f/60.0f;
+        }
+        if(shakeDuration <= 0 && shaking)
+        {
+            shaking = false;
+            shakeDuration = 0;
+            cam->position = shakePos;
+        }
     }
 
     void setTarget(float x, float y, float z)
@@ -69,8 +100,14 @@ class MyCam
         cam->target = (Vector3){x, y, z};
     }
 
+    bool isShaking()
+    {
+        return shakeDuration > 0;
+    }
+
     void setPos(float x, float y, float z)
     {
+        if(shakeDuration > 0){return;}
         cam->position = (Vector3){x, y, z};
     }
 
@@ -476,7 +513,6 @@ public:
         localAxis[2] = {0, 0, 1};
     }
 
-
     void move() override
     {
         const float maxThrottle = 0.075;
@@ -519,7 +555,7 @@ public:
         dist_cam2kapal = Vector3Distance(position, camera->getPos());
         float zoomMove = GetMouseWheelMove();
         
-        if((dist_cam2kapal > 2 && zoomMove > 0) || (dist_cam2kapal < 100 && zoomMove < 0))
+        if(((dist_cam2kapal > 2 && zoomMove > 0) || (dist_cam2kapal < 100 && zoomMove < 0)) && !camera->isShaking())
         {
             CameraMoveForward(camera->getCam(), zoomMove, false);
         }
@@ -596,9 +632,8 @@ class EKapal : public Kapal
                     movement[1] = true;
                 }
             }
-
         }
-        
+
         if(Vector3Angle(localAxis[2] , normalizeVector3(Vector3Subtract(target->getPos(), position))) * RAD2DEG < 5)
         {
             movement[4] = true;
@@ -660,8 +695,6 @@ class EKapal : public Kapal
         if(cooldownTimer_L > 0) {cooldownTimer_L--;}
     }
 
-    float targetAng(){return angleToFace;}
-
     EKapal(Vector3 pos, float initAngle, Kapal* target) : Kapal(pos)
     {
         this->target = target;
@@ -706,7 +739,8 @@ int main(void)
     MyCam camera({0, 0, 0});
     std::cout<<"starting loop1\n";
     MKapal main_kapal({0, 1.5, 0}, 0, &camera);
-    EKapal enemy_kapal({10, 1.5, 10}, 0, &main_kapal);
+    EKapal enemy_kapal({10, 1.5, 10}, 180, &main_kapal);
+    EKapal enemy_kapal1({10, 1.5, -10}, 180, &main_kapal);
     std::cout<<"starting loop2\n";
     Ocean ocean(100, &camera, 0.01, 0.025);
     std::cout<<"starting loop3\n";
@@ -736,6 +770,7 @@ int main(void)
                 //game update
                 main_kapal.move();
                 enemy_kapal.move();
+                enemy_kapal1.move();
                 ocean.update();
                 for(int i = 0; i < Bullets.size(); i++)
                 {
@@ -755,13 +790,10 @@ int main(void)
                 }
                 main_kapal.draw();
                 enemy_kapal.draw();
+                enemy_kapal1.draw();
                 ocean.drawWaves();
 
             EndMode3D();
-
-            DrawText(TextFormat("angle2see: %f", enemy_kapal.targetAng()), 10, 10, 50, RED);
-            DrawText(TextFormat("anglecurr: %f", enemy_kapal.getAngle()), 10, 60, 50, RED);
-
             break;
         }
 
