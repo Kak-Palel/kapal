@@ -15,11 +15,17 @@ const Color SEABLUE = {29,162,216};
 enum {MENU = 0, SETTING, GAMEPLAY, PAUSE, DEAD};
 unsigned long long int frameCounter = 0;
 
+class Kapal;
+class MKapal;
+class EKapal;
+class Ocean;
+class Bullet;
+
 struct ShipHitbox
 {
-    BoundingBox rail;
-    BoundingBox deck;
+    BoundingBox ship;
     float* health;
+    Kapal* owner;
 };
 std::vector<ShipHitbox*> ShipHitboxes;
 
@@ -80,7 +86,7 @@ class MyCam
         arr[3] = {cam->position.x + xLowerDist, 0, cam->position.z - zHalfLowerDist};
 
         //shake
-        if(shakeDuration > 0)
+        if(shakeDuration > 0 && shaking)
         {
             cam->position.x += GetRandomValue(-1, 1)*shakeIntensity;
             cam->position.y += GetRandomValue(-1, 1)*shakeIntensity;
@@ -307,13 +313,15 @@ class Bullet
     float downSpeed;
     bool isAlive;
     float radius;
+    Kapal* owner;
     std::vector<Vector3> trails;
 
     public:
-    Bullet(Vector3 pos, Vector3 directionVec, float speed = 0.3, float dmg = 10, float radius = 0.25) : position(pos), damage(dmg), isAlive(true)
+    Bullet(Vector3 pos, Vector3 directionVec, Kapal* shooter, float speed = 0.3, float dmg = 10, float radius = 0.25) : position(pos), damage(dmg), isAlive(true)
     {
         this->speed = speed;
         this->direction = normalizeVector3(directionVec);
+        this->owner = shooter;
 
         this->downSpeed = -1*directionVec.y;
 
@@ -321,27 +329,7 @@ class Bullet
     }
     ~Bullet() {}
 
-    void update()
-    {
-        position.x += direction.x * speed;
-        position.z += direction.z * speed;
-
-        position.y -= downSpeed;
-        downSpeed += GRAVITY/60;
-
-        if(position.y < -1) {isAlive = false; return;}
-
-        //check collision
-        for(int i = 0; i < ShipHitboxes.size(); i++)
-        {
-            if(CheckCollisionBoxSphere(ShipHitboxes[i]->rail, position, radius) || CheckCollisionBoxSphere(ShipHitboxes[i]->deck, position, radius))
-            {
-                *(ShipHitboxes[i]->health) -= damage;
-                isAlive = false;
-            }
-        }
-
-    }
+    void update();
 
     void draw()
     {
@@ -375,7 +363,6 @@ class Bullet
 };
 std::vector<Bullet*> Bullets;
 
-
 class Kapal
 {
     private:
@@ -403,6 +390,7 @@ class Kapal
     // virtual void draw() {DrawCube(position, 1.0f, 2.0f, 2.0f, RED);}
     virtual void move() {}
     
+
     void determineLocalAxis()
     {
         localAxis[0] = normalizeVector3((Vector3){position.x*sin((angle)*DEG2RAD), 0, position.z*cos((angle)*DEG2RAD)});
@@ -437,15 +425,15 @@ class Kapal
     {
         if(right && cooldownTimer_R > 0) {return;}
         else if(!right && cooldownTimer_L > 0) {return;}
-        
+
         if(right) {cooldownTimer_R = cooldown;}
         else {cooldownTimer_L = cooldown;}
-        
+
         Vector3 bulletPos = position;
         bulletPos.y += 0.5;
         bulletPos.z -= 1.5*cos((angle)*DEG2RAD);
         bulletPos.x -= 1.5*sin((angle)*DEG2RAD);
-        
+
         Vector3 bulletDir;
         bulletDir.x = sin((angle - 90)*DEG2RAD);
         bulletDir.z = cos((angle - 90)*DEG2RAD);
@@ -457,20 +445,36 @@ class Kapal
             bulletDir.y *= -1;
             bulletDir.z *= -1;
         }
-        
-        Bullet* temp = new Bullet(bulletPos, bulletDir);
+
+        Bullet* temp = new Bullet(bulletPos, bulletDir, this);
         Bullets.push_back(temp);
     }
-    
+
     void draw()
     {
         DrawModel(model, {position.x, position.y + 1.5f, position.z}, scale, WHITE);
+        DrawBoundingBox(hitboxes.ship, RED);
+        DrawCube(hitboxes.ship.min, 0.5, 0.5, 0.5, RED);
+        DrawCube(hitboxes.ship.max, 0.5, 0.5, 0.5, RED);
     }
-    
+
+    void updateBoundingBox()
+    {
+        hitboxes.ship.min.x = position.x - 1 - 2*abs(sin(angle*DEG2RAD));
+        hitboxes.ship.min.y = position.y - 1.5;
+        hitboxes.ship.min.z = position.z - 1 - 2*abs(cos(angle*DEG2RAD));
+
+        hitboxes.ship.max.x = position.x + 1 + 2*abs(sin(angle*DEG2RAD));
+        hitboxes.ship.max.y = position.y + 1.5;
+        hitboxes.ship.max.z = position.z + 1 + 2*abs(cos(angle*DEG2RAD));
+    }
+
     Vector3 getPos()
     {
         return position;
     }
+    
+    virtual MyCam* getCam() {return nullptr;}
 
     float getAngle()
     {
@@ -482,6 +486,32 @@ class Kapal
         UnloadModel(model);
     }
 };
+
+void Bullet::update()
+{
+    position.x += direction.x * speed;
+    position.z += direction.z * speed;
+
+    position.y -= downSpeed;
+    downSpeed += GRAVITY/60;
+
+    if(position.y < -1) {isAlive = false; return;}
+
+    //check collision
+    for(int i = 0; i < ShipHitboxes.size(); i++)
+    {
+        if(CheckCollisionBoxSphere(ShipHitboxes[i]->ship, position, radius) && ShipHitboxes[i]->owner != nullptr && ShipHitboxes[i]->owner != this->owner)
+        {
+            *(ShipHitboxes[i]->health) -= damage;
+            if(i == 0)
+            {
+                ShipHitboxes[i]->owner->getCam()->shake(0.5, 0.5);
+            }
+            isAlive = false;
+        }
+    }
+
+}
 
 class MKapal : public Kapal
 {
@@ -497,6 +527,8 @@ public:
         camera = cam;
 
         hitboxes.health = &health;
+        updateBoundingBox();
+        hitboxes.owner = this;
         ShipHitboxes.push_back(&hitboxes);
 
         scale = 0.25f;
@@ -511,6 +543,11 @@ public:
         localAxis[0] = {1, 0, 0};
         localAxis[1] = {0, 1, 0};   
         localAxis[2] = {0, 0, 1};
+    }
+
+    MyCam* getCam() override
+    {
+        return camera;
     }
 
     void move() override
@@ -555,10 +592,11 @@ public:
         dist_cam2kapal = Vector3Distance(position, camera->getPos());
         float zoomMove = GetMouseWheelMove();
         
-        if(((dist_cam2kapal > 2 && zoomMove > 0) || (dist_cam2kapal < 100 && zoomMove < 0)) && !camera->isShaking())
+        if(((dist_cam2kapal > 6 && zoomMove > 0) || (dist_cam2kapal < 100 && zoomMove < 0)) && !camera->isShaking())
         {
             CameraMoveForward(camera->getCam(), zoomMove, false);
         }
+        camera->setTarget(position.x, 0, position.z);
         determineLocalAxis();
 
         //shoot
@@ -567,6 +605,8 @@ public:
 
         if(cooldownTimer_R > 0) {cooldownTimer_R--;}
         if(cooldownTimer_L > 0) {cooldownTimer_L--;}
+        
+        updateBoundingBox();
     }
 };
 
@@ -634,11 +674,13 @@ class EKapal : public Kapal
             }
         }
 
-        if(Vector3Angle(localAxis[2] , normalizeVector3(Vector3Subtract(target->getPos(), position))) * RAD2DEG < 5)
+        float aimAngle = Vector3Angle(localAxis[2] , normalizeVector3(Vector3Subtract(target->getPos(), position))) * RAD2DEG;
+        if(0 < aimAngle && aimAngle < 10)
         {
             movement[4] = true;
         }
-        if(Vector3Angle(Vector3Scale(localAxis[2], -1) , normalizeVector3(Vector3Subtract(target->getPos(), position))) * RAD2DEG < 5)
+        aimAngle = Vector3Angle(Vector3Scale(localAxis[2], -1) , normalizeVector3(Vector3Subtract(target->getPos(), position))) * RAD2DEG < 10;
+        if(0 < aimAngle && aimAngle < 10)
         {
             movement[5] = true;
         }
@@ -693,6 +735,8 @@ class EKapal : public Kapal
 
         if(cooldownTimer_R > 0) {cooldownTimer_R--;}
         if(cooldownTimer_L > 0) {cooldownTimer_L--;}
+
+        updateBoundingBox();
     }
 
     EKapal(Vector3 pos, float initAngle, Kapal* target) : Kapal(pos)
@@ -702,6 +746,8 @@ class EKapal : public Kapal
         angle = 90 + initAngle;
 
         hitboxes.health = &health;
+        updateBoundingBox();
+        hitboxes.owner = this;
         ShipHitboxes.push_back(&hitboxes);
 
         throttle = 0;
@@ -772,6 +818,7 @@ int main(void)
                 enemy_kapal.move();
                 enemy_kapal1.move();
                 ocean.update();
+                
                 for(int i = 0; i < Bullets.size(); i++)
                 {
                     Bullets[i]->update();
@@ -783,7 +830,7 @@ int main(void)
                 }
 
                 //game draw
-                // DrawGrid(1000, 1);
+                DrawGrid(1000, 1);
                 for(int i = 0; i < Bullets.size(); i++)
                 {
                     Bullets[i]->draw();
@@ -793,7 +840,10 @@ int main(void)
                 enemy_kapal1.draw();
                 ocean.drawWaves();
 
+
             EndMode3D();
+            
+            DrawText(TextFormat("angle: %f", main_kapal.getAngle()), 10, 10, 40, RED);
             break;
         }
 
