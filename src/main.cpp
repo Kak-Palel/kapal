@@ -284,6 +284,11 @@ public:
         tempScope = scope;
     }
 
+    Vector3 getScope(int index)
+    {
+        return scope[index];
+    }
+
     void drawWaves()
     {
         for(int i = 0; i < waveCount; i++) {
@@ -414,6 +419,12 @@ class Kapal
         cooldownTimer_R = 0;
         cooldownTimer_L = 0;
         model = LoadModel("assets/obj/ship/allShip.obj");
+        health = 50;
+    }
+
+    float getHealth()
+    {
+        return health;
     }
 
     Vector3 getLocalAxis(int index)
@@ -453,6 +464,11 @@ class Kapal
     void draw()
     {
         DrawModel(model, {position.x, position.y + 1.5f, position.z}, scale, WHITE);
+        DrawCube({position.x, position.y + 2, position.z}, 0.25, 0.25, 2*(health/50), RED);
+    }
+
+    void debugDraw()
+    {
         DrawBoundingBox(hitboxes.ship, RED);
         DrawCube(hitboxes.ship.min, 0.5, 0.5, 0.5, RED);
         DrawCube(hitboxes.ship.max, 0.5, 0.5, 0.5, RED);
@@ -615,6 +631,7 @@ class EKapal : public Kapal
     private:
     Kapal* target;
     float angleToFace;
+    bool active;
 
     std::vector<bool> control()
     {
@@ -714,7 +731,6 @@ class EKapal : public Kapal
         buoyancyPeriod += 0.025;
         position.y = 0.5 + 0.5*sin(0.1*buoyancyPeriod);
         buoyancyAngle = 10*sin(buoyancyPeriod);
-        // if(buoyancyPeriod % (2*PI) && buoyancyPeriod != 0) {buoyancyPeriod = 0;}
 
         model.transform = MatrixIdentity();
         model.transform = MatrixMultiply(model.transform, MatrixRotate(localAxis[1], DEG2RAD * angle));
@@ -739,11 +755,36 @@ class EKapal : public Kapal
         updateBoundingBox();
     }
 
+    void restart(Vector3 pos)
+    {
+        position = pos;
+        health = 50;
+    }
+
+    bool isActive()
+    {
+        return active;
+    }
+
+    void setActive(bool act, Vector3 pos = {0, 0, 0})
+    {
+        if(act)
+        {
+            active = true;
+            restart(pos);
+        }
+        else
+        {
+            active = false;
+        }
+    }
+
     EKapal(Vector3 pos, float initAngle, Kapal* target) : Kapal(pos)
     {
         this->target = target;
         scale = 0.25f;
         angle = 90 + initAngle;
+        active = false;
 
         hitboxes.health = &health;
         updateBoundingBox();
@@ -759,6 +800,12 @@ class EKapal : public Kapal
         localAxis[0] = {1, 0, 0};
         localAxis[1] = {0, 1, 0};   
         localAxis[2] = {0, 0, 1};
+    }
+
+    ~EKapal()
+    {
+        UnloadTexture(model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture);
+        UnloadModel(model);
     }
 };
 
@@ -778,18 +825,59 @@ Vector3 normalizeVector3(Vector3 v)
     return {v.x/length, v.y/length, v.z/length};
 }
 
+std::vector<EKapal*> enemyKapals;
+void createEnemyKapal(Vector3 pos, float angle, Kapal* target)
+{
+    EKapal* temp = new EKapal(pos, angle, target);
+    enemyKapals.push_back(temp);
+}
+
+Vector3 getRandomPos(Vector3 center, float radius, bool inside)
+{
+    Vector3 temp;
+    temp.y = 0;
+
+    float r;
+    float theta = GetRandomValue(0, 360)*DEG2RAD;
+
+    if(inside)
+    {
+        r = GetRandomValue(0, radius);
+    }
+    else
+    {
+        r = GetRandomValue(radius, 10);
+    }
+
+    temp.x = center.x + r*sin(theta);
+    temp.z = center.z + r*cos(theta);
+    return temp;
+}
+
 int main(void)
 {
     InitWindow(screenWidth, screenHeight, "KAPAL");
 
+    bool debug = false;
+
     MyCam camera({0, 0, 0});
-    std::cout<<"starting loop1\n";
+    
     MKapal main_kapal({0, 1.5, 0}, 0, &camera);
-    EKapal enemy_kapal({10, 1.5, 10}, 180, &main_kapal);
-    EKapal enemy_kapal1({10, 1.5, -10}, 180, &main_kapal);
-    std::cout<<"starting loop2\n";
+
+    const int maxEnemy = 11;
+    int activeEnemy = 2;
+    for(int i = 0; i < maxEnemy; i++)
+    {
+        // createEnemyKapal(getRandomPos(main_kapal.getPos(), Vector3Distance(main_kapal.getPos(), ocean.getScope(1)), false), GetRandomValue(0, 360), &main_kapal);
+        createEnemyKapal(getRandomPos(main_kapal.getPos(), 23.67379f, false), GetRandomValue(0, 360), &main_kapal);
+    }
+
+    for(int i = 0; i < activeEnemy; i++)
+    {
+        enemyKapals[i]->setActive(true, getRandomPos(main_kapal.getPos(), 23.67379f, false));
+    }
+
     Ocean ocean(100, &camera, 0.01, 0.025);
-    std::cout<<"starting loop3\n";
     int gamestate = GAMEPLAY;
 
     float deltaTime;
@@ -815,8 +903,22 @@ int main(void)
             BeginMode3D(*(camera.getCam()));
                 //game update
                 main_kapal.move();
-                enemy_kapal.move();
-                enemy_kapal1.move();
+
+                for(int i = 0; i < enemyKapals.size(); i++)
+                {
+                    if(!enemyKapals[i]->isActive()){break;}
+                    enemyKapals[i]->move();
+                    if(enemyKapals[i]->getHealth() <= 0)
+                    {
+                        enemyKapals[i]->restart(getRandomPos(main_kapal.getPos(), Vector3Distance(main_kapal.getPos(), ocean.getScope(1)), false));
+                        if(activeEnemy < maxEnemy)
+                        {
+                            enemyKapals[activeEnemy]->setActive(true, getRandomPos(main_kapal.getPos(), Vector3Distance(main_kapal.getPos(), ocean.getScope(1)), false));
+                            activeEnemy++;
+                        }
+                    }
+                }
+
                 ocean.update();
                 
                 for(int i = 0; i < Bullets.size(); i++)
@@ -830,20 +932,38 @@ int main(void)
                 }
 
                 //game draw
-                DrawGrid(1000, 1);
                 for(int i = 0; i < Bullets.size(); i++)
                 {
                     Bullets[i]->draw();
                 }
+                
                 main_kapal.draw();
-                enemy_kapal.draw();
-                enemy_kapal1.draw();
-                ocean.drawWaves();
 
+                for(int i = 0; i < enemyKapals.size(); i++)
+                {
+                    if(!enemyKapals[i]->isActive()){break;}
+                    enemyKapals[i]->draw();
+                }
+
+                ocean.drawWaves();
+                
+                //debug draw
+                if(debug)
+                {
+                    DrawGrid(1000, 1);
+                    main_kapal.debugDraw();
+                    for(int i = 0; i < enemyKapals.size(); i++)
+                    {
+                        enemyKapals[i]->debugDraw();
+                    }
+                }
 
             EndMode3D();
             
-            DrawText(TextFormat("angle: %f", main_kapal.getAngle()), 10, 10, 40, RED);
+            if(debug)
+            {
+                DrawText(TextFormat("mainship angle: %f", main_kapal.getAngle()), 10, 10, 40, RED);
+            }
             break;
         }
 
