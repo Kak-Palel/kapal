@@ -239,7 +239,6 @@ public:
         cam->viewScope(scope);
         tempScope = scope;
         createWave(waveDensity*(scope[0].x - scope[2].x)*(scope[1].z - scope[0].z));
-
         waveModel = LoadModel("assets/obj/wave.obj");
         waveModel.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/wave.png");
     }
@@ -432,7 +431,7 @@ class Kapal
         return localAxis[index];
     }
 
-    void shoot(bool right)
+    void shoot(bool right, Vector3 direction)
     {
         if(right && cooldownTimer_R > 0) {return;}
         else if(!right && cooldownTimer_L > 0) {return;}
@@ -445,19 +444,19 @@ class Kapal
         bulletPos.z -= 1.5*cos((angle)*DEG2RAD);
         bulletPos.x -= 1.5*sin((angle)*DEG2RAD);
 
-        Vector3 bulletDir;
-        bulletDir.x = sin((angle - 90)*DEG2RAD);
-        bulletDir.z = cos((angle - 90)*DEG2RAD);
-        bulletDir.y = sin(tempRoll*DEG2RAD);
+        // Vector3 bulletDir;
+        // bulletDir.x = sin((angle - 90)*DEG2RAD);
+        // bulletDir.z = cos((angle - 90)*DEG2RAD);
+        // bulletDir.y = sin(tempRoll*DEG2RAD);
 
-        if(!right)
-        {
-            bulletDir.x *= -1;
-            bulletDir.y *= -1;
-            bulletDir.z *= -1;
-        }
+        // if(!right)
+        // {
+        //     bulletDir.x *= -1;
+        //     bulletDir.y *= -1;
+        //     bulletDir.z *= -1;
+        // }
 
-        Bullet* temp = new Bullet(bulletPos, bulletDir, this);
+        Bullet* temp = new Bullet(bulletPos, direction, this);
         Bullets.push_back(temp);
     }
 
@@ -535,12 +534,15 @@ private:
 
     float dist_cam2kapal;
     MyCam* camera;
+    std::vector<Kapal*>& enemies;
 
 
 public:
-    MKapal(Vector3 pos, float initAngle, MyCam* cam) : Kapal(pos)
+    MKapal(Vector3 pos, float initAngle, MyCam* cam, std::vector<Kapal*>& enemiesArray) : Kapal(pos), enemies(enemiesArray)
     {
         camera = cam;
+
+        // this->enemies = enemiesArray;
 
         hitboxes.health = &health;
         updateBoundingBox();
@@ -616,8 +618,26 @@ public:
         determineLocalAxis();
 
         //shoot
-        if(IsKeyReleased(KEY_RIGHT)){shoot(true);}
-        if(IsKeyReleased(KEY_LEFT)){shoot(false);}
+        if(IsKeyReleased(KEY_RIGHT))
+        {
+            //default bullet direction
+            Vector3 bulletDir;
+            bulletDir.x = sin((angle - 90)*DEG2RAD);
+            bulletDir.z = cos((angle - 90)*DEG2RAD);
+            bulletDir.y = sin(tempRoll*DEG2RAD);
+
+            shoot(true, bulletDir);
+        }
+        if(IsKeyReleased(KEY_LEFT))
+        {
+            //default bullet direction
+            Vector3 bulletDir;
+            bulletDir.x = -1*sin((angle - 90)*DEG2RAD);
+            bulletDir.z = -1*cos((angle - 90)*DEG2RAD);
+            bulletDir.y = -1*sin(tempRoll*DEG2RAD);
+
+            shoot(false, bulletDir);
+        }
 
         if(cooldownTimer_R > 0) {cooldownTimer_R--;}
         if(cooldownTimer_L > 0) {cooldownTimer_L--;}
@@ -746,8 +766,8 @@ class EKapal : public Kapal
         determineLocalAxis();
 
         //shoot
-        if(movement[4]){shoot(true);}
-        if(movement[5]){shoot(false);}
+        if(movement[4]){shoot(true, {1, -1, 1});}
+        if(movement[5]){shoot(false, {1, -1, 1});}
 
         if(cooldownTimer_R > 0) {cooldownTimer_R--;}
         if(cooldownTimer_L > 0) {cooldownTimer_L--;}
@@ -825,11 +845,13 @@ Vector3 normalizeVector3(Vector3 v)
     return {v.x/length, v.y/length, v.z/length};
 }
 
+std::vector<Kapal*> enemyKapals_copy;
 std::vector<EKapal*> enemyKapals;
 void createEnemyKapal(Vector3 pos, float angle, Kapal* target)
 {
     EKapal* temp = new EKapal(pos, angle, target);
     enemyKapals.push_back(temp);
+    enemyKapals_copy.push_back(temp);
 }
 
 Vector3 getRandomPos(Vector3 center, float radius, bool inside)
@@ -854,6 +876,81 @@ Vector3 getRandomPos(Vector3 center, float radius, bool inside)
     return temp;
 }
 
+class Button
+{
+    private:
+    Rectangle inner;
+    Rectangle outer;
+
+    Color color_main;
+    Color color_border;
+    Color color_hover;
+    Color color_text;
+
+    const char* name;
+
+    int textSize;
+
+    bool hover;
+
+    public:
+    Button(Vector2 pos, float width, float height , const char* name, int fontSize, float borderLen = 10, Color color = WHITE, Color borderColor = BLACK, Color hoverColor = GRAY, Color textColor = BLACK)
+    {
+        inner.x = pos.x;
+        inner.y = pos.y;
+        outer.x = pos.x - 10;
+        outer.y = pos.y - 10;
+
+        inner.width = width;
+        inner.height = height;
+        outer.width = width + 20;
+        outer.height = height + 20;
+
+        this->color_main = color;
+        this->color_border = borderColor;
+        this->color_hover = hoverColor;
+        this->color_text = textColor;
+
+        this->name = name;
+
+        this->textSize = fontSize;
+    }
+
+    bool update()
+    {
+        if(CheckCollisionPointRec(GetMousePosition(), inner))
+        {
+            hover = true;
+            if(IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            {
+                return true;
+            }
+        }
+        else
+        {
+            hover = false;
+        }
+
+        return false;
+    }
+
+    void draw()
+    {
+        DrawRectangleRec(outer, color_border);
+        if(hover)
+        {
+            DrawRectangleRec(inner, color_hover);
+        }
+        else
+        {
+            DrawRectangleRec(inner, color_main);
+        }
+
+        DrawText(name, inner.x + (inner.width/2.0f) - textSize*TextLength(name)/4, inner.y + inner.height/2 - textSize/2, textSize, color_text);
+        // DrawText(name, 0, inner.y + inner.height/2 - textSize/2, textSize, color_text);
+    }
+};
+
 int main(void)
 {
     InitWindow(screenWidth, screenHeight, "KAPAL");
@@ -862,23 +959,24 @@ int main(void)
 
     MyCam camera({0, 0, 0});
     
-    MKapal main_kapal({0, 1.5, 0}, 0, &camera);
+    MKapal main_kapal({0, 1.5, 0}, 0, &camera, enemyKapals_copy);
 
     const int maxEnemy = 11;
-    int activeEnemy = 2;
+    int startingEnemy = 2;
+    int activeEnemy = startingEnemy;
     for(int i = 0; i < maxEnemy; i++)
     {
         // createEnemyKapal(getRandomPos(main_kapal.getPos(), Vector3Distance(main_kapal.getPos(), ocean.getScope(1)), false), GetRandomValue(0, 360), &main_kapal);
         createEnemyKapal(getRandomPos(main_kapal.getPos(), 23.67379f, false), GetRandomValue(0, 360), &main_kapal);
     }
 
-    for(int i = 0; i < activeEnemy; i++)
+    for(int i = 0; i < startingEnemy; i++)
     {
         enemyKapals[i]->setActive(true, getRandomPos(main_kapal.getPos(), 23.67379f, false));
     }
 
     Ocean ocean(100, &camera, 0.01, 0.025);
-    int gamestate = GAMEPLAY;
+    int gamestate = MENU;
 
     float deltaTime;
     ToggleFullscreen();
@@ -894,11 +992,74 @@ int main(void)
         switch (gamestate)
         {
         case MENU:
-            break;
+        {
+            ClearBackground(SEABLUE);
+
+            BeginMode3D(*(camera.getCam()));
+                ocean.update();
+                ocean.drawWaves();
+            EndMode3D();
+
+            activeEnemy = startingEnemy;
+            for(int i = 0; i < maxEnemy; i++)
+            {
+                if(i < startingEnemy)
+                {
+                    enemyKapals[i]->setActive(true, getRandomPos(main_kapal.getPos(), 23.67379f, false));
+                }
+                else
+                {
+                    enemyKapals[i]->setActive(false, {0, 0, 0});
+                }
+            }
+
+            Button playButton({(float)GetScreenWidth()/2.0f - 300, (float)GetScreenHeight()/2.0f - 100.0f}, 600, 200, "Play!", 100);
+            Button settingButton({(float)GetScreenWidth()/2.0f - 300.0f, (float)GetScreenHeight()/2.0f + 130.0f}, 285, 100, "Settings", 50);
+            Button exitButton({(float)GetScreenWidth()/2.0f + 15, (float)GetScreenHeight()/2.0f + 130.0f}, 285, 100, "Exit", 50);
+
+            if(playButton.update()) {gamestate = GAMEPLAY;}
+            else if(settingButton.update()) {gamestate = SETTING;}
+            else if(exitButton.update()) {CloseWindow();}
+            
+            playButton.draw();
+            settingButton.draw();
+            exitButton.draw();
+
+        }break;
         case SETTING:
-            break;
+        {
+            ClearBackground(SEABLUE);
+
+            BeginMode3D(*(camera.getCam()));
+                ocean.update();
+                ocean.drawWaves();
+            EndMode3D();
+
+            Button playButton({(float)GetScreenWidth()/2.0f - 300, (float)GetScreenHeight()/2.0f - 100.0f}, 600, 200, "Play!", 100);
+            Button settingButton({(float)GetScreenWidth()/2.0f - 300.0f, (float)GetScreenHeight()/2.0f + 130.0f}, 285, 100, "Settings", 50);
+            Button exitButton({(float)GetScreenWidth()/2.0f + 15, (float)GetScreenHeight()/2.0f + 130.0f}, 285, 100, "Exit", 50);
+
+            playButton.draw();
+            settingButton.draw();
+            exitButton.draw();
+
+            DrawRectangle((float)GetScreenWidth()/2.0f - 260, (float)GetScreenHeight()/2.0f - 510, 520, 1020, BLACK);
+            DrawRectangle((float)GetScreenWidth()/2.0f - 250, (float)GetScreenHeight()/2.0f - 500, 500, 1000, WHITE);
+
+            Rectangle closeSetting = {(float)GetScreenWidth()/2.0f + 190, (float)GetScreenHeight()/2.0f - 490, 50, 50};
+            if(CheckCollisionPointRec(GetMousePosition(), closeSetting))
+            {
+                DrawRectangleRec(closeSetting, GRAY);
+                if(IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {gamestate = MENU;}
+            }
+
+            DrawText("x", (int)closeSetting.x + closeSetting.width/4 - TextLength("x")/2, (int)closeSetting.y + closeSetting.width/2 - 25, 50, BLACK);
+
+            
+        }break;
         case GAMEPLAY:
             ClearBackground(SEABLUE);
+            if(IsKeyReleased(KEY_P)) {gamestate = MENU;}
 
             BeginMode3D(*(camera.getCam()));
                 //game update
