@@ -44,7 +44,7 @@ class MyCam
     public:
     MyCam(Vector3 target)
     {
-        cam  = new Camera();
+        cam = new Camera();
         cam->position = (Vector3){target.x-10.0f, target.y+10.0f, target.z};
         cam->target = target;
         cam->up = (Vector3){ 0.0f, 1.0f, 0.0f };
@@ -563,6 +563,19 @@ public:
         localAxis[2] = {0, 0, 1};
     }
 
+    void restart()
+    {
+        position = {0, 0, 0};
+        cooldownTimer_L = 0;
+        cooldownTimer_R = 0;
+
+        health = 50;
+        angle = 90;
+
+        camera->setTarget(0, 0, 0);
+        camera->setPos(-10.0f, 10, 0);
+    }
+
     MyCam* getCam() override
     {
         return camera;
@@ -655,7 +668,6 @@ class EKapal : public Kapal
 
     std::vector<bool> control()
     {
-        //TODO: FIX AI-------------------------------------------------------------------------------------------------------------------
         const float minDistToAttack = 20.0f;
         const float angleTolerance = 5;
         std::vector<bool> movement = {false,  //W 
@@ -766,8 +778,22 @@ class EKapal : public Kapal
         determineLocalAxis();
 
         //shoot
-        if(movement[4]){shoot(true, {1, -1, 1});}
-        if(movement[5]){shoot(false, {1, -1, 1});}
+        if(movement[4])
+        {
+            Vector3 bulletDir;
+            bulletDir.x = sin((angle - 90)*DEG2RAD);
+            bulletDir.z = cos((angle - 90)*DEG2RAD);
+            bulletDir.y = sin(tempRoll*DEG2RAD);
+            shoot(true, bulletDir);
+        }
+        if(movement[5])
+        {
+            Vector3 bulletDir;
+            bulletDir.x = -1*sin((angle - 90)*DEG2RAD);
+            bulletDir.z = -1*cos((angle - 90)*DEG2RAD);
+            bulletDir.y = -1*sin(tempRoll*DEG2RAD);
+            shoot(false, bulletDir);
+        }
 
         if(cooldownTimer_R > 0) {cooldownTimer_R--;}
         if(cooldownTimer_L > 0) {cooldownTimer_L--;}
@@ -845,8 +871,46 @@ Vector3 normalizeVector3(Vector3 v)
     return {v.x/length, v.y/length, v.z/length};
 }
 
+class Explosion
+{
+    private:
+    Vector3 pos;
+    float minRadius;
+    float maxRadius;
+    float radius;
+    float time;
+    Color color;
+    bool active;
+
+    public:
+    Explosion(Vector3 Pos, float startRadius = 1, float maxRadius = 3, Color color = RED, float Time = 0.5) : pos(Pos), radius(startRadius), color(color), time(Time)
+    {
+        this->minRadius = startRadius;
+        this->maxRadius = maxRadius;
+        active = true;
+    }
+
+    bool isActive()
+    {
+        return active;
+    }
+
+    void update()
+    {
+        radius += (maxRadius - minRadius)/(60*time);
+        if(radius >= maxRadius) {active = false;}
+    }
+
+    void draw()
+    {
+        DrawSphere(pos, radius, color);
+    }
+};
+
+
 std::vector<Kapal*> enemyKapals_copy;
 std::vector<EKapal*> enemyKapals;
+std::vector<Explosion*> explosions;
 void createEnemyKapal(Vector3 pos, float angle, Kapal* target)
 {
     EKapal* temp = new EKapal(pos, angle, target);
@@ -951,6 +1015,233 @@ class Button
     }
 };
 
+class CheckBox
+{
+    private:
+    Color color_border;
+    Color color_hover; 
+    Color color_inside;
+    Color color_char; 
+
+    Rectangle main;
+    Rectangle border;
+
+    bool* value;
+    bool hover;
+
+    public:
+        CheckBox(Rectangle rec, bool* value, Color borderColor = BLACK, Color main = WHITE, Color charColor = BLACK, Color hover = GRAY) : main(rec), color_border(borderColor), color_char(charColor), color_inside(main), color_hover(hover)
+    {
+        this->value = value;
+        border.x = rec.x - 10;
+        border.y = rec.y - 10;
+
+        border.width = rec.width + 20;
+        border.height = rec.height + 20;
+    }
+
+    void update()
+    {
+        if(CheckCollisionPointRec(GetMousePosition(), main))
+        {
+            hover = true;
+            if(IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
+            {
+                *value = !(*value);
+            }
+        }
+        else
+        {
+            hover = false;
+        }
+    }
+
+    void draw()
+    {
+        DrawRectangleRec(border, color_border);
+        if(hover)
+        {
+            DrawRectangleRec(main, color_hover);
+        }
+        else
+        {
+            DrawRectangleRec(main, color_inside);
+        }
+
+        if(*value)
+        {
+            DrawText("x", main.x + main.width/4 - TextLength("x")/2, main.y, main.height, color_char);
+        }
+    }
+};
+
+void logoScreen(int framesCounter)
+{
+    int logoPositionX;
+    int logoPositionY;
+
+    int lettersCount = 0;
+
+    int topSideRecWidth, initialTopSideRecWidth;
+    int leftSideRecHeight, initialLeftSideRecHeight;
+    int factor = 0;
+
+    int bottomSideRecWidth, initialBottomSideRecWidth;
+    int rightSideRecHeight, initialRightSideRecHeight;
+
+    int state = 0;
+    float alpha = 1.0f;
+
+    bool skipTitle = 0;
+
+    while (!skipTitle && state < 4)
+    {
+        if (IsKeyReleased(KEY_SPACE)) {break;}
+
+        logoPositionX = GetScreenWidth()*4/10;
+        logoPositionY = GetScreenHeight()*4/10 - GetScreenWidth()/80 ;
+
+        initialTopSideRecWidth = GetScreenWidth()/80;
+        initialLeftSideRecHeight = GetScreenWidth()/80;
+
+        initialBottomSideRecWidth = GetScreenWidth()/80;
+        initialRightSideRecHeight = GetScreenWidth()/80;
+
+        if (state == 0)
+        {
+            framesCounter++;
+
+            if (framesCounter == 120)
+            {
+                state = 1;
+                framesCounter = 0;
+            }
+        }
+        else if (state == 1)
+        {
+            factor += 4;
+            topSideRecWidth = initialTopSideRecWidth + GetScreenWidth()*factor/1280;
+            leftSideRecHeight = initialLeftSideRecHeight + GetScreenWidth()*factor/1280;
+
+            if (topSideRecWidth >= GetScreenWidth()/5) {factor = 0; state = 2;}
+        }
+        else if (state == 2)
+        {
+            factor += 4;
+            bottomSideRecWidth = initialBottomSideRecWidth + GetScreenWidth()*factor/1280;
+            rightSideRecHeight = initialRightSideRecHeight + GetScreenWidth()*factor/1280;
+
+            if (bottomSideRecWidth >= GetScreenWidth()/5) state = 3;
+        }
+        else if (state == 3)
+        {
+            framesCounter++;
+
+            if (framesCounter/12)
+            {
+                lettersCount++;
+                framesCounter = 0;
+            }
+
+            if (lettersCount >= 10)
+            {
+                alpha -= 0.02f;
+
+                if (alpha <= 0.0f)
+                {
+                    alpha = 0.0f;
+                    state = 4;
+                }
+            }
+        }
+        else if (state == 4)
+        {
+            break;
+        }
+
+        BeginDrawing();
+
+            ClearBackground(RAYWHITE);
+
+            if (state == 0)
+            {
+                if ((framesCounter/15)%2) DrawRectangle(logoPositionX, logoPositionY, GetScreenWidth()/80, GetScreenWidth()/80, BLACK);
+            }
+            else if (state == 1)
+            {
+                DrawRectangle(logoPositionX, logoPositionY, topSideRecWidth, GetScreenWidth()/80, BLACK);
+                DrawRectangle(logoPositionX, logoPositionY, GetScreenWidth()/80, leftSideRecHeight, BLACK);
+            }
+            else if (state == 2)
+            {
+                DrawRectangle(logoPositionX, logoPositionY, GetScreenWidth()/5, GetScreenWidth()/80, BLACK);
+                DrawRectangle(logoPositionX, logoPositionY, GetScreenWidth()/80, GetScreenWidth()/5, BLACK);
+
+                DrawRectangle(logoPositionX + GetScreenWidth()*3/16, logoPositionY, GetScreenWidth()/80, rightSideRecHeight, BLACK);
+                DrawRectangle(logoPositionX, logoPositionY + GetScreenWidth()*3/16, bottomSideRecWidth, GetScreenWidth()/80, BLACK);
+            }
+            else if (state == 3)
+            {
+                DrawRectangle(logoPositionX, logoPositionY, GetScreenWidth()/5, GetScreenWidth()/80, Fade(BLACK, alpha));
+                DrawRectangle(logoPositionX, logoPositionY, GetScreenWidth()/80, GetScreenWidth()/5, Fade(BLACK, alpha));
+
+                DrawRectangle(logoPositionX + GetScreenWidth()*3/16, logoPositionY, GetScreenWidth()/80, GetScreenWidth()/5, Fade(BLACK, alpha));
+                DrawRectangle(logoPositionX, logoPositionY + GetScreenWidth()*3/16, GetScreenWidth()/5, GetScreenWidth()/80, Fade(BLACK, alpha));
+
+                DrawText(TextSubtext("raylib", 0, lettersCount), logoPositionX + GetScreenWidth()*3/16 - MeasureText("raylib", GetScreenWidth()*5/128) - GetScreenWidth()/64, logoPositionY + GetScreenWidth()*3/16 - GetScreenWidth()*5/128 - GetScreenWidth()/64, GetScreenWidth()*5/128, Fade(BLACK, alpha));
+            }
+
+        EndDrawing();
+        
+    }
+}
+
+void nameScreen(int framesCounter)
+{
+    Vector2 namePosition;
+    Vector2 nrpPosition;
+    float alpha = 0.0f;
+    bool skipName = 0;
+    int nameSize;
+    int nrpSize;
+
+
+        while (!skipName && framesCounter <= 150)
+        {
+            BeginDrawing();
+            if(IsKeyDown(KEY_SPACE)) {break;}
+            nameSize = GetScreenWidth() * 5/128;
+            nrpSize = GetScreenWidth() * 5/256;
+            namePosition = {(float)(GetScreenWidth()/2 - MeasureText("FARREL GANENDRA", nameSize)/2), (float)(GetScreenHeight()/2 - nameSize - GetScreenHeight()/160)};
+            nrpPosition = {(float)(GetScreenWidth()/2 - MeasureText("5024231036", nrpSize)/2), (float)(GetScreenHeight()/2 + GetScreenHeight()/160)};
+
+            if(framesCounter <= 30)
+            {
+                ClearBackground(RAYWHITE);
+                DrawText("FARREL GANENDRA", (int)namePosition.x, (int)namePosition.y, nameSize, Fade(BLACK, alpha));
+                DrawText("5024231036", (int)nrpPosition.x, (int)nrpPosition.y, nrpSize, Fade(BLACK, alpha));
+                alpha += 0.033f;
+            }
+            else if(framesCounter > 30 && framesCounter <= 120)
+            {
+                ClearBackground(RAYWHITE);
+                DrawText("FARREL GANENDRA", (int)namePosition.x, (int)namePosition.y, nameSize, BLACK);
+                DrawText("5024231036", (int)nrpPosition.x, (int)nrpPosition.y, nrpSize, BLACK);
+            }
+            else if(framesCounter > 120 && framesCounter <= 150)
+            {
+                ClearBackground(RAYWHITE);
+                DrawText("FARREL GANENDRA", (int)namePosition.x, (int)namePosition.y, nameSize, Fade(BLACK, alpha));
+                DrawText("5024231036", (int)nrpPosition.x, (int)nrpPosition.y, nrpSize, Fade(BLACK, alpha));
+                alpha -= 0.033f;
+            }
+
+            framesCounter++;
+            EndDrawing();
+        }
+    
+}
+
 int main(void)
 {
     InitWindow(screenWidth, screenHeight, "KAPAL");
@@ -978,15 +1269,14 @@ int main(void)
     Ocean ocean(100, &camera, 0.01, 0.025);
     int gamestate = MENU;
 
-    float deltaTime;
     ToggleFullscreen();
     SetTargetFPS(60);
 
+    logoScreen(frameCounter);
+    nameScreen(frameCounter);
 
     while (!WindowShouldClose())
     {
-        deltaTime = GetFrameTime();
-
         BeginDrawing();
         
         switch (gamestate)
@@ -1017,7 +1307,11 @@ int main(void)
             Button settingButton({(float)GetScreenWidth()/2.0f - 300.0f, (float)GetScreenHeight()/2.0f + 130.0f}, 285, 100, "Settings", 50);
             Button exitButton({(float)GetScreenWidth()/2.0f + 15, (float)GetScreenHeight()/2.0f + 130.0f}, 285, 100, "Exit", 50);
 
-            if(playButton.update()) {gamestate = GAMEPLAY;}
+            if(playButton.update())
+            {
+                main_kapal.restart();
+                gamestate = GAMEPLAY;
+            }
             else if(settingButton.update()) {gamestate = SETTING;}
             else if(exitButton.update()) {CloseWindow();}
             
@@ -1052,14 +1346,19 @@ int main(void)
                 DrawRectangleRec(closeSetting, GRAY);
                 if(IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {gamestate = MENU;}
             }
-
             DrawText("x", (int)closeSetting.x + closeSetting.width/4 - TextLength("x")/2, (int)closeSetting.y + closeSetting.width/2 - 25, 50, BLACK);
 
-            
+            CheckBox debugCheckBox({(float)GetScreenWidth()/2 - 230, (float)GetScreenHeight()/2 - 420, 50, 50}, &debug);
+            debugCheckBox.update();
+            debugCheckBox.draw();
+
+            DrawText("Debug mode", GetScreenWidth()/2 - 160, GetScreenHeight()/2 - 420, 50, BLACK);
+
         }break;
         case GAMEPLAY:
             ClearBackground(SEABLUE);
-            if(IsKeyReleased(KEY_P)) {gamestate = MENU;}
+            if(IsKeyReleased(KEY_P)) {gamestate = PAUSE;}
+            if(main_kapal.getHealth() <= 0) {gamestate = DEAD;}
 
             BeginMode3D(*(camera.getCam()));
                 //game update
@@ -1067,10 +1366,12 @@ int main(void)
 
                 for(int i = 0; i < enemyKapals.size(); i++)
                 {
-                    if(!enemyKapals[i]->isActive()){break;}
+                    if(!enemyKapals[i]->isActive()) {break;}
                     enemyKapals[i]->move();
                     if(enemyKapals[i]->getHealth() <= 0)
                     {
+                        Explosion* tempExplosion = new Explosion(enemyKapals[i]->getPos());
+                        explosions.push_back(tempExplosion);
                         enemyKapals[i]->restart(getRandomPos(main_kapal.getPos(), Vector3Distance(main_kapal.getPos(), ocean.getScope(1)), false));
                         if(activeEnemy < maxEnemy)
                         {
@@ -1078,6 +1379,17 @@ int main(void)
                             activeEnemy++;
                         }
                     }
+                }
+
+                for(int i = 0; i < explosions.size(); i++)
+                {
+                    if(!explosions[i]->isActive())
+                    {
+                        delete explosions[i];
+                        explosions.erase(explosions.begin() + i);
+                        // i--;
+                    }
+                    explosions[i]->update();
                 }
 
                 ocean.update();
@@ -1106,6 +1418,11 @@ int main(void)
                     enemyKapals[i]->draw();
                 }
 
+                for(int i = 0; i < explosions.size(); i++)
+                {
+                    explosions[i]->draw();
+                }
+
                 ocean.drawWaves();
                 
                 //debug draw
@@ -1126,8 +1443,135 @@ int main(void)
                 DrawText(TextFormat("mainship angle: %f", main_kapal.getAngle()), 10, 10, 40, RED);
             }
             break;
-        }
+        case PAUSE:
+        {
+            ClearBackground(SEABLUE);
+            BeginMode3D(*(camera.getCam()));
+            for(int i = 0; i < Bullets.size(); i++)
+            {
+                Bullets[i]->draw();
+            }
+                
+            main_kapal.draw();
 
+            for(int i = 0; i < enemyKapals.size(); i++)
+            {
+                if(!enemyKapals[i]->isActive()){break;}
+                enemyKapals[i]->draw();
+            }
+
+            ocean.drawWaves();
+            
+            for(int i = 0; i < explosions.size(); i++)
+            {
+                explosions[i]->draw();
+            }
+                
+            //debug draw
+            if(debug)
+            {
+                DrawGrid(1000, 1);
+                main_kapal.debugDraw();
+                for(int i = 0; i < enemyKapals.size(); i++)
+                {
+                    enemyKapals[i]->debugDraw();
+                }
+            }
+
+            EndMode3D();
+            
+            if(debug)
+            {
+                DrawText(TextFormat("mainship angle: %f", main_kapal.getAngle()), 10, 10, 40, RED);
+            }
+
+            DrawRectangle((float)GetScreenWidth()/2.0f - 410, (float)GetScreenHeight()/2.0f - 310, 820, 470, BLACK);
+            DrawRectangle((float)GetScreenWidth()/2.0f - 400, (float)GetScreenHeight()/2.0f - 300, 800, 450, WHITE);
+
+            DrawText("Paused", GetScreenWidth()/2 - 25*TextLength("You Dead"), (float)GetScreenHeight()/2.0f - 200, 100, BLACK);
+
+            Button menuButton({(float)GetScreenWidth()/2.0f - 300.0f, (float)GetScreenHeight()/2.0f - 50}, 285, 100, "Menu", 50);
+            Button retryButton({(float)GetScreenWidth()/2.0f + 15, (float)GetScreenHeight()/2.0f - 50}, 285, 100, "Continue", 50);
+
+            if(menuButton.update()) {gamestate = MENU;}
+            else if(retryButton.update()) {gamestate = GAMEPLAY;}
+            
+            menuButton.draw();
+            retryButton.draw();
+        }break;
+        case DEAD:
+        {
+            ClearBackground(SEABLUE);
+            BeginMode3D(*(camera.getCam()));
+            for(int i = 0; i < Bullets.size(); i++)
+            {
+                Bullets[i]->draw();
+            }
+                
+            // main_kapal.draw();
+
+            for(int i = 0; i < enemyKapals.size(); i++)
+            {
+                if(!enemyKapals[i]->isActive()){break;}
+                enemyKapals[i]->draw();
+            }
+
+            ocean.drawWaves();
+            
+            for(int i = 0; i < explosions.size(); i++)
+            {
+                explosions[i]->draw();
+            }
+                
+            //debug draw
+            if(debug)
+            {
+                DrawGrid(1000, 1);
+                main_kapal.debugDraw();
+                for(int i = 0; i < enemyKapals.size(); i++)
+                {
+                    enemyKapals[i]->debugDraw();
+                }
+            }
+
+            EndMode3D();
+            
+            if(debug)
+            {
+                DrawText(TextFormat("mainship angle: %f", main_kapal.getAngle()), 10, 10, 40, RED);
+            }
+
+            DrawRectangle((float)GetScreenWidth()/2.0f - 410, (float)GetScreenHeight()/2.0f - 310, 820, 470, BLACK);
+            DrawRectangle((float)GetScreenWidth()/2.0f - 400, (float)GetScreenHeight()/2.0f - 300, 800, 450, WHITE);
+
+            DrawText("You Dead", GetScreenWidth()/2 - 25*TextLength("You Dead") - 25, (float)GetScreenHeight()/2.0f - 200, 100, BLACK);
+
+            Button menuButton({(float)GetScreenWidth()/2.0f - 300.0f, (float)GetScreenHeight()/2.0f - 50}, 285, 100, "Menu", 50);
+            Button retryButton({(float)GetScreenWidth()/2.0f + 15, (float)GetScreenHeight()/2.0f - 50}, 285, 100, "Retry", 50);
+
+            if(menuButton.update()) {gamestate = MENU;}
+            else if(retryButton.update()) 
+            {
+                for(int i = 0; i < maxEnemy; i++)
+                {
+                    if(i < startingEnemy)
+                    {
+                        enemyKapals[i]->setActive(true, getRandomPos(main_kapal.getPos(), 23.67379f, false));
+                    }
+                    else
+                    {
+                        enemyKapals[i]->setActive(false, {0, 0, 0});
+                    }
+                }
+                main_kapal.restart();
+                gamestate = GAMEPLAY;
+            }
+            
+            menuButton.draw();
+            retryButton.draw();
+
+        }break;
+        }
         EndDrawing();
 
         frameCounter++;
@@ -1135,3 +1579,5 @@ int main(void)
     CloseWindow();
     return 0;
 }
+
+//Farrel Ganendra | 06 - Juli - 2024
