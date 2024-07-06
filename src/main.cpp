@@ -1254,7 +1254,7 @@ int main(void)
 
     const int maxEnemy = 11;
     int startingEnemy = 2;
-    int activeEnemy = startingEnemy;
+    int  activeEnemy = startingEnemy;
     for(int i = 0; i < maxEnemy; i++)
     {
         // createEnemyKapal(getRandomPos(main_kapal.getPos(), Vector3Distance(main_kapal.getPos(), ocean.getScope(1)), false), GetRandomValue(0, 360), &main_kapal);
@@ -1269,7 +1269,7 @@ int main(void)
     Ocean ocean(100, &camera, 0.01, 0.025);
     int gamestate = MENU;
 
-    ToggleFullscreen();
+    // ToggleFullscreen();
     SetTargetFPS(60);
 
     logoScreen(frameCounter);
@@ -1488,7 +1488,7 @@ int main(void)
             DrawRectangle((float)GetScreenWidth()/2.0f - 410, (float)GetScreenHeight()/2.0f - 310, 820, 470, BLACK);
             DrawRectangle((float)GetScreenWidth()/2.0f - 400, (float)GetScreenHeight()/2.0f - 300, 800, 450, WHITE);
 
-            DrawText("Paused", GetScreenWidth()/2 - 25*TextLength("You Dead"), (float)GetScreenHeight()/2.0f - 200, 100, BLACK);
+            DrawText("Paused", GetScreenWidth()/2 - 25*TextLength("Paused"), (float)GetScreenHeight()/2.0f - 200, 100, BLACK);
 
             Button menuButton({(float)GetScreenWidth()/2.0f - 300.0f, (float)GetScreenHeight()/2.0f - 50}, 285, 100, "Menu", 50);
             Button retryButton({(float)GetScreenWidth()/2.0f + 15, (float)GetScreenHeight()/2.0f - 50}, 285, 100, "Continue", 50);
