@@ -239,8 +239,8 @@ public:
         cam->viewScope(scope);
         tempScope = scope;
         createWave(waveDensity*(scope[0].x - scope[2].x)*(scope[1].z - scope[0].z));
-        waveModel = LoadModel("assets/obj/wave.obj");
-        waveModel.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("assets/tex/wave.png");
+        waveModel = LoadModel("../assets/obj/wave.obj");
+        waveModel.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = LoadTexture("../assets/tex/wave.png");
     }
 
     void update()
@@ -417,7 +417,7 @@ class Kapal
         cooldown = 60;
         cooldownTimer_R = 0;
         cooldownTimer_L = 0;
-        model = LoadModel("assets/obj/ship/allShip.obj");
+        model = LoadModel("../assets/obj/ship/allShip.obj");
         health = 50;
     }
 
